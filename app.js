@@ -286,16 +286,35 @@ function categoryTotalForMonth(catId, ym) {
   const accIds = new Set(STATE.accounts.filter((a) => a.category === catId).map((a) => a.id));
   return STATE.records.filter((r) => r.yearMonth === ym && accIds.has(r.accountId)).reduce((s, r) => s + r.balance, 0);
 }
+function lastRecordedAtForMonth(ym) {
+  const stamps = STATE.records.filter((r) => r.yearMonth === ym && r.recordedAt).map((r) => r.recordedAt);
+  if (stamps.length === 0) return null;
+  return stamps.sort().pop();
+}
+function formatRecordedDate(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}に記録`;
+}
 
 // ---------- ホーム画面 ----------
+document.getElementById('btn-toggle-amounts').addEventListener('click', async () => {
+  STATE.settings.hideAmounts = !STATE.settings.hideAmounts;
+  await persist();
+  renderHome();
+});
 function renderHome() {
+  const hidden = !!STATE.settings.hideAmounts;
+  document.getElementById('btn-toggle-amounts').textContent = hidden ? '🙈' : '👁️';
   const months = recordedMonths();
   const latestYm = months[months.length - 1];
   const prevYm = months.length > 1 ? months[months.length - 2] : null;
   const total = latestYm ? totalForMonth(latestYm) : 0;
-  document.getElementById('home-total').textContent = Charts.formatYen(total);
+  document.getElementById('home-total').textContent = hidden ? '¥••••••••' : Charts.formatYen(total);
   const deltaEl = document.getElementById('home-delta');
-  if (latestYm && prevYm) {
+  if (hidden) {
+    deltaEl.textContent = latestYm ? `${ymLabelFull(latestYm)}時点（金額は非表示中）` : 'まだ記録がありません';
+    deltaEl.className = 'total-sub';
+  } else if (latestYm && prevYm) {
     const diff = total - totalForMonth(prevYm);
     const sign = diff > 0 ? '+' : '';
     deltaEl.textContent = `${ymLabelFull(prevYm)}比 ${sign}${Charts.formatYen(diff)}`;
@@ -322,11 +341,11 @@ function renderHome() {
   }
 
   const points = months.slice(-12).map((ym) => ({ label: ymLabelShort(ym), value: totalForMonth(ym) }));
-  Charts.drawLineChart(document.getElementById('home-trend-chart'), points);
+  Charts.drawLineChart(document.getElementById('home-trend-chart'), points, '#4f9dff', hidden);
 
   document.getElementById('home-breakdown-month').textContent = latestYm ? ymLabelFull(latestYm) : '-';
   const breakdown = latestYm ? breakdownForMonth(latestYm) : [];
-  Charts.drawPieChart(document.getElementById('home-pie-chart'), breakdown);
+  Charts.drawPieChart(document.getElementById('home-pie-chart'), breakdown, hidden);
   const legendEl = document.getElementById('home-pie-legend');
   const breakdownTotal = breakdown.reduce((s, it) => s + it.value, 0) || 1;
   if (breakdown.length === 0) {
@@ -385,6 +404,7 @@ document.getElementById('record-prev-month').addEventListener('click', () => { r
 document.getElementById('record-next-month').addEventListener('click', () => { recordViewYm = ymAdd(recordViewYm, 1); renderRecordView(); });
 document.getElementById('btn-save-record').addEventListener('click', async () => {
   const inputs = document.querySelectorAll('#record-groups input[data-account-id]');
+  const now = new Date().toISOString();
   let count = 0;
   inputs.forEach((input) => {
     const accountId = input.dataset.accountId;
@@ -394,7 +414,8 @@ document.getElementById('btn-save-record').addEventListener('click', async () =>
       if (idx >= 0) STATE.records.splice(idx, 1);
       return;
     }
-    if (idx >= 0) STATE.records[idx].balance = val; else STATE.records.push({ yearMonth: recordViewYm, accountId, balance: val });
+    if (idx >= 0) { STATE.records[idx].balance = val; STATE.records[idx].recordedAt = now; }
+    else STATE.records.push({ yearMonth: recordViewYm, accountId, balance: val, recordedAt: now });
     count++;
   });
   await persist();
@@ -407,8 +428,29 @@ let historySelectedSeries = 'total';
 function usedCategories() {
   return categories().filter((c) => STATE.accounts.some((a) => a.category === c.id));
 }
+function historySeriesOrder() {
+  const catIds = new Set(usedCategories().map((c) => c.id));
+  const validIds = new Set(['total', 'all', ...catIds]);
+  let order = (STATE.settings.historySeriesOrder || []).filter((id) => validIds.has(id));
+  if (!order.includes('total')) order.unshift('total');
+  if (!order.includes('all')) { const i = order.indexOf('total'); order.splice(i + 1, 0, 'all'); }
+  validIds.forEach((id) => { if (!order.includes(id)) order.push(id); });
+  STATE.settings.historySeriesOrder = order;
+  return order;
+}
 function historySeriesList() {
-  return [{ id: 'total', label: '総額', color: '#4f9dff' }, { id: 'all', label: 'すべて', color: '#a1a1aa' }, ...usedCategories()];
+  const dict = { total: { id: 'total', label: '総額', color: '#4f9dff' }, all: { id: 'all', label: 'すべて', color: '#a1a1aa' } };
+  usedCategories().forEach((c) => { dict[c.id] = c; });
+  return historySeriesOrder().map((id) => dict[id]).filter(Boolean);
+}
+async function moveHistorySeries(id, dir) {
+  const order = historySeriesOrder().slice();
+  const i = order.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  STATE.settings.historySeriesOrder = order;
+  await persist();
 }
 function renderHistorySeriesPicker() {
   const picker = document.getElementById('history-series-picker');
@@ -483,8 +525,10 @@ function renderHistory() {
       const sign = diff > 0 ? '+' : '';
       deltaHtml = `<span class="meta" style="color:${diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text-faint)'}">${sign}${Charts.formatYenShort(diff)}</span>`;
     }
+    const recordedAt = lastRecordedAtForMonth(ym);
+    const recordedHtml = recordedAt ? `<div class="meta">${formatRecordedDate(recordedAt)}</div>` : '';
     row.innerHTML = `
-      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${deltaHtml}</div></div>
+      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${deltaHtml}${recordedHtml}</div></div>
       <div class="value">${Charts.formatYen(total)}</div>
     `;
     row.addEventListener('click', () => { recordViewYm = ym; switchView('record'); });
@@ -667,9 +711,32 @@ function openCategoryModal(existing) {
   }
 }
 
+function renderHistoryOrderSettings() {
+  const list = document.getElementById('history-order-list');
+  const dict = { total: { id: 'total', label: '総額' }, all: { id: 'all', label: 'すべて' } };
+  usedCategories().forEach((c) => { dict[c.id] = c; });
+  const order = historySeriesOrder();
+  list.innerHTML = order.map((id, i) => `
+    <div class="list-row">
+      <div class="main"><span class="name">${escapeHtml(dict[id].label)}</span></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn small secondary" data-id="${id}" data-dir="-1" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="btn small secondary" data-id="${id}" data-dir="1" ${i === order.length - 1 ? 'disabled' : ''}>↓</button>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('button').forEach((b) => {
+    b.addEventListener('click', async () => {
+      await moveHistorySeries(b.dataset.id, Number(b.dataset.dir));
+      renderHistoryOrderSettings();
+    });
+  });
+}
+
 // ---------- 設定画面 ----------
 async function renderSettings() {
   renderCategoriesSettings();
+  renderHistoryOrderSettings();
   document.getElementById('setting-reminder-day').value = STATE.settings.reminderDay || 25;
   const bioSwitch = document.getElementById('biometric-switch');
   const bioStatus = document.getElementById('biometric-status-text');

@@ -30,13 +30,15 @@ const Storage = (() => {
       accounts: [],
       records: [],
       categories: defaultCategories(),
-      settings: { reminderDay: 25, createdAt: new Date().toISOString() },
+      settings: { reminderDay: 25, hideAmounts: false, historySeriesOrder: ['total', 'all'], createdAt: new Date().toISOString() },
     };
   }
 
   function normalizeState(state) {
     if (!state.categories || state.categories.length === 0) state.categories = defaultCategories();
     if (!state.settings) state.settings = { reminderDay: 25, createdAt: new Date().toISOString() };
+    if (typeof state.settings.hideAmounts !== 'boolean') state.settings.hideAmounts = false;
+    if (!Array.isArray(state.settings.historySeriesOrder)) state.settings.historySeriesOrder = ['total', 'all'];
     if (!state.accounts) state.accounts = [];
     if (!state.records) state.records = [];
     return state;

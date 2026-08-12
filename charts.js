@@ -53,7 +53,7 @@ const Charts = (() => {
     return { niceMin, niceMax, step, lines: Math.max(1, lines) };
   }
 
-  function drawAxisGrid(ctx, axis, padL, padR, width, y) {
+  function drawAxisGrid(ctx, axis, padL, padR, width, y, masked = false) {
     ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     ctx.font = '11px -apple-system, sans-serif';
@@ -66,11 +66,11 @@ const Charts = (() => {
       ctx.moveTo(padL, yy);
       ctx.lineTo(width - padR, yy);
       ctx.stroke();
-      ctx.fillText(formatYenShort(v), padL - 8, yy);
+      ctx.fillText(masked ? '••••' : formatYenShort(v), padL - 8, yy);
     }
   }
 
-  function drawLineChart(canvas, points, color = '#4f9dff') {
+  function drawLineChart(canvas, points, color = '#4f9dff', masked = false) {
     const { ctx, width, height } = setupCanvas(canvas);
     ctx.clearRect(0, 0, width, height);
     if (!points || points.length === 0) {
@@ -92,7 +92,7 @@ const Charts = (() => {
     const x = (i) => padL + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
     const y = (v) => padT + plotH - ((v - niceMin) / niceRange) * plotH;
 
-    drawAxisGrid(ctx, axis, padL, padR, width, y);
+    drawAxisGrid(ctx, axis, padL, padR, width, y, masked);
 
     // エリア塗り
     const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
@@ -239,7 +239,7 @@ const Charts = (() => {
     });
   }
 
-  function drawPieChart(canvas, items) {
+  function drawPieChart(canvas, items, masked = false) {
     const { ctx, width, height } = setupCanvas(canvas);
     ctx.clearRect(0, 0, width, height);
     const total = items.reduce((s, it) => s + Math.max(0, it.value), 0);
@@ -275,7 +275,7 @@ const Charts = (() => {
     ctx.font = 'bold 15px -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(formatYenShort(total), cx, cy - 6);
+    ctx.fillText(masked ? '••••' : formatYenShort(total), cx, cy - 6);
     ctx.fillStyle = 'rgba(238,242,255,0.45)';
     ctx.font = '10.5px -apple-system, sans-serif';
     ctx.fillText('合計', cx, cy + 12);

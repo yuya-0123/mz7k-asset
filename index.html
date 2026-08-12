@@ -62,7 +62,10 @@
       <div id="view-home" class="view">
         <div id="home-banner-slot"></div>
         <div class="card">
-          <h3>現在の資産合計</h3>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <h3 style="margin:0;">現在の資産合計</h3>
+            <button class="icon-btn" id="btn-toggle-amounts" style="font-size:18px;padding:2px 4px;" aria-label="金額の表示切り替え">👁️</button>
+          </div>
           <div class="total-figure" id="home-total">¥0</div>
           <div class="total-sub" id="home-delta"></div>
         </div>
@@ -113,6 +116,10 @@
           <h3>カテゴリ管理</h3>
           <div id="categories-list"></div>
           <button class="btn secondary small" id="btn-add-category" style="margin-top:6px;">＋ カテゴリを追加</button>
+        </div>
+        <div class="card">
+          <h3>履歴タブの並び順</h3>
+          <div id="history-order-list"></div>
         </div>
         <div class="card">
           <h3>リマインダー</h3>
