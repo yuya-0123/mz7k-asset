@@ -1,6 +1,8 @@
 // アプリ本体: 画面遷移・状態管理・各画面の描画ロジック。
 
 const PIN_LEN = 6;
+const ICON_EYE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const ICON_EYE_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 1 11s4 7 11 7a9.26 9.26 0 0 0 5.39-1.61"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 const CATEGORY_COLOR_CHOICES = ['#4f9dff', '#34d399', '#f59e0b', '#f472b6', '#a78bfa', '#fb7185', '#22d3ee', '#facc15'];
 function categories() { return STATE.categories; }
 function categoryById(id) {
@@ -304,7 +306,7 @@ document.getElementById('btn-toggle-amounts').addEventListener('click', async ()
 });
 function renderHome() {
   const hidden = !!STATE.settings.hideAmounts;
-  document.getElementById('btn-toggle-amounts').textContent = hidden ? '🙈' : '👁️';
+  document.getElementById('btn-toggle-amounts').innerHTML = hidden ? ICON_EYE_OFF : ICON_EYE;
   const months = recordedMonths();
   const latestYm = months[months.length - 1];
   const prevYm = months.length > 1 ? months[months.length - 2] : null;
