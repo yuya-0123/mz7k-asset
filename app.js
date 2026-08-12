@@ -426,6 +426,13 @@ document.getElementById('btn-save-record').addEventListener('click', async () =>
   });
   await persist();
   showToast(`${ymLabelFull(recordViewYm)}の記録を保存しました`);
+  if (STATE.settings.autoBackup) {
+    const wantsBackup = await confirmDialog('バックアップを作成しますか？', '今回の記録を含む最新のデータをファイルに書き出して保存します。', '作成する', false);
+    if (wantsBackup) {
+      await downloadBackupFile('asset-tracker-backup');
+      showToast('バックアップを保存しました');
+    }
+  }
   switchView('home');
 });
 document.getElementById('btn-delete-month').addEventListener('click', async () => {
@@ -772,6 +779,15 @@ async function renderSettings() {
     }
     renderSettings();
   };
+
+  const autoBackupSwitch = document.getElementById('autobackup-switch');
+  autoBackupSwitch.classList.toggle('on', !!STATE.settings.autoBackup);
+  autoBackupSwitch.onclick = async () => {
+    STATE.settings.autoBackup = !STATE.settings.autoBackup;
+    await persist();
+    showToast(STATE.settings.autoBackup ? '自動バックアップを有効にしました' : '自動バックアップを無効にしました');
+    renderSettings();
+  };
 }
 document.getElementById('setting-reminder-day').addEventListener('change', async (e) => {
   let v = Number(e.target.value);
@@ -820,18 +836,24 @@ function openChangePinModal() {
   });
 }
 
-document.getElementById('btn-export-backup').addEventListener('click', async () => {
+function todayDateStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+async function downloadBackupFile(prefix) {
   const json = await Storage.exportBackup();
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `asset-tracker-backup-${stamp}.json`;
+  a.download = `${prefix}-${todayDateStr()}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+document.getElementById('btn-export-backup').addEventListener('click', async () => {
+  await downloadBackupFile('asset-tracker-backup');
   showToast('バックアップを書き出しました');
 });
 
