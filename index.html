@@ -66,11 +66,11 @@
           <div class="total-figure" id="home-total">¥0</div>
           <div class="total-sub" id="home-delta"></div>
         </div>
-        <div class="card">
+        <div class="card chart-card">
           <h3>推移</h3>
           <canvas class="chart" id="home-trend-chart"></canvas>
         </div>
-        <div class="card">
+        <div class="card chart-card">
           <h3>資産配分（<span id="home-breakdown-month"></span>）</h3>
           <div style="display:flex;align-items:center;gap:16px;">
             <canvas id="home-pie-chart" width="140" height="140" style="width:140px;height:140px;flex-shrink:0;"></canvas>
@@ -92,12 +92,15 @@
 
       <div id="view-history" class="view hidden">
         <div class="category-picker" id="history-series-picker" style="margin-bottom:12px;"></div>
-        <div class="card">
+        <div class="card chart-card">
           <div class="total-sub" id="history-series-delta" style="margin-bottom:8px;"></div>
           <canvas class="chart tall" id="history-trend-chart"></canvas>
+          <div id="history-legend" style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:12px;"></div>
         </div>
-        <div class="section-title">記録済みの月</div>
-        <div id="history-list"></div>
+        <div class="history-list-wrap">
+          <div class="section-title" style="margin-top:16px;">記録済みの月</div>
+          <div id="history-list"></div>
+        </div>
       </div>
 
       <div id="view-accounts" class="view hidden">

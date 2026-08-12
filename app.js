@@ -246,6 +246,7 @@ function switchView(view) {
   document.getElementById('view-' + view).classList.remove('hidden');
   document.querySelectorAll('.tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   document.getElementById('topbar-title').textContent = VIEW_TITLES[view];
+  document.querySelector('.content').classList.toggle('no-scroll', view === 'home' || view === 'history');
   if (view === 'home') renderHome();
   if (view === 'record') { recordViewYm = recordViewYm || todayYm(); renderRecordView(); }
   if (view === 'history') renderHistory();
@@ -403,9 +404,15 @@ document.getElementById('btn-save-record').addEventListener('click', async () =>
 
 // ---------- 履歴画面 ----------
 let historySelectedSeries = 'total';
+function usedCategories() {
+  return categories().filter((c) => STATE.accounts.some((a) => a.category === c.id));
+}
+function historySeriesList() {
+  return [{ id: 'total', label: '総額', color: '#4f9dff' }, { id: 'all', label: 'すべて', color: '#a1a1aa' }, ...usedCategories()];
+}
 function renderHistorySeriesPicker() {
   const picker = document.getElementById('history-series-picker');
-  const seriesList = [{ id: 'total', label: '総額', color: '#4f9dff' }, ...categories()];
+  const seriesList = historySeriesList();
   if (!seriesList.some((s) => s.id === historySelectedSeries)) historySelectedSeries = 'total';
   picker.innerHTML = seriesList.map((s) => `<button type="button" data-series="${s.id}" class="${s.id === historySelectedSeries ? 'selected' : ''}">${escapeHtml(s.label)}</button>`).join('');
   picker.querySelectorAll('button').forEach((b) => {
@@ -414,13 +421,32 @@ function renderHistorySeriesPicker() {
 }
 function renderHistoryChart() {
   const months = recordedMonths();
-  const seriesList = [{ id: 'total', label: '総額', color: '#4f9dff' }, ...categories()];
+  const seriesList = historySeriesList();
   const series = seriesList.find((s) => s.id === historySelectedSeries) || seriesList[0];
+  const deltaEl = document.getElementById('history-series-delta');
+  const legendEl = document.getElementById('history-legend');
+
+  if (series.id === 'all') {
+    const catSeries = usedCategories().map((c) => ({
+      label: c.label,
+      color: c.color,
+      points: months.map((ym) => ({ label: ymLabelShort(ym), value: categoryTotalForMonth(c.id, ym) })),
+    }));
+    Charts.drawMultiLineChart(document.getElementById('history-trend-chart'), catSeries);
+    deltaEl.textContent = 'カテゴリ別の推移';
+    deltaEl.className = 'total-sub';
+    legendEl.innerHTML = catSeries.map((s) => `
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);">
+        <span style="width:9px;height:9px;border-radius:50%;background:${s.color};flex-shrink:0;"></span>${escapeHtml(s.label)}
+      </div>`).join('');
+    return;
+  }
+  legendEl.innerHTML = '';
+
   const valueForMonth = (ym) => (series.id === 'total' ? totalForMonth(ym) : categoryTotalForMonth(series.id, ym));
   const points = months.map((ym) => ({ label: ymLabelShort(ym), value: valueForMonth(ym) }));
   Charts.drawLineChart(document.getElementById('history-trend-chart'), points, series.color);
 
-  const deltaEl = document.getElementById('history-series-delta');
   if (points.length >= 2) {
     const diff = points[points.length - 1].value - points[0].value;
     const sign = diff > 0 ? '+' : '';

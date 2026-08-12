@@ -47,6 +47,14 @@ button { -webkit-appearance: none; appearance: none; }
 .topbar .icon-btn { background: none; border: none; color: var(--text-dim); font-size: 22px; padding: 6px; }
 
 .content { flex: 1; overflow-y: auto; padding: 0 18px calc(90px + var(--safe-bottom)); -webkit-overflow-scrolling: touch; }
+.content.no-scroll { overflow: hidden; padding-bottom: 14px; }
+.content.no-scroll .view { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.content.no-scroll .view .chart-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.content.no-scroll .view .chart-card canvas.chart { flex: 1; width: 100%; height: 100% !important; min-height: 40px; }
+.content.no-scroll .view .chart-card canvas.chart.tall { height: 100% !important; }
+.content.no-scroll #view-history .history-list-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.content.no-scroll #view-history .history-list-wrap .section-title { flex-shrink: 0; }
+.content.no-scroll #view-history #history-list { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 .centered-screen {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;

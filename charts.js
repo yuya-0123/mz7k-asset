@@ -28,6 +28,48 @@ const Charts = (() => {
     return '¥' + v.toLocaleString('ja-JP');
   }
 
+  // 1-3-5-10 × 10^n の「きりのいい」刻み幅を選ぶ(資産額が増えるほど自動で大きい単位に切り替わる)
+  function niceStep(rawStep) {
+    if (!(rawStep > 0)) return 1;
+    const exponent = Math.floor(Math.log10(rawStep));
+    const base = Math.pow(10, exponent);
+    const fraction = rawStep / base;
+    let niceFraction;
+    if (fraction <= 1) niceFraction = 1;
+    else if (fraction <= 3) niceFraction = 3;
+    else if (fraction <= 5) niceFraction = 5;
+    else niceFraction = 10;
+    return niceFraction * base;
+  }
+
+  function computeAxis(allValues, targetLines = 4) {
+    let min = Math.min(...allValues, 0);
+    let max = Math.max(...allValues, 1);
+    if (min === max) { min -= 1; max += 1; }
+    const step = niceStep((max - min) / targetLines);
+    const niceMin = Math.floor(min / step) * step;
+    const niceMax = Math.ceil(max / step) * step;
+    const lines = Math.round((niceMax - niceMin) / step);
+    return { niceMin, niceMax, step, lines: Math.max(1, lines) };
+  }
+
+  function drawAxisGrid(ctx, axis, padL, padR, width, y) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i <= axis.lines; i++) {
+      const v = axis.niceMin + axis.step * i;
+      const yy = y(v);
+      ctx.beginPath();
+      ctx.moveTo(padL, yy);
+      ctx.lineTo(width - padR, yy);
+      ctx.stroke();
+      ctx.fillText(formatYenShort(v), padL - 8, yy);
+    }
+  }
+
   function drawLineChart(canvas, points, color = '#4f9dff') {
     const { ctx, width, height } = setupCanvas(canvas);
     ctx.clearRect(0, 0, width, height);
@@ -43,33 +85,14 @@ const Charts = (() => {
     const plotH = height - padT - padB;
 
     const values = points.map((p) => p.value);
-    let min = Math.min(...values, 0);
-    let max = Math.max(...values, 1);
-    if (min === max) { min -= 1; max += 1; }
-    const range = max - min;
-    const niceMin = min - range * 0.08;
-    const niceMax = max + range * 0.08;
-    const niceRange = niceMax - niceMin || 1;
+    const axis = computeAxis(values);
+    const niceMin = axis.niceMin;
+    const niceRange = (axis.niceMax - axis.niceMin) || 1;
 
     const x = (i) => padL + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
     const y = (v) => padT + plotH - ((v - niceMin) / niceRange) * plotH;
 
-    // グリッド + y軸ラベル
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.font = '11px -apple-system, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    const gridLines = 4;
-    for (let i = 0; i <= gridLines; i++) {
-      const v = niceMin + (niceRange * i) / gridLines;
-      const yy = y(v);
-      ctx.beginPath();
-      ctx.moveTo(padL, yy);
-      ctx.lineTo(width - padR, yy);
-      ctx.stroke();
-      ctx.fillText(formatYenShort(v), padL - 8, yy);
-    }
+    drawAxisGrid(ctx, axis, padL, padR, width, y);
 
     // エリア塗り
     const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
@@ -117,6 +140,66 @@ const Charts = (() => {
     const step = Math.max(1, Math.ceil(points.length / maxLabels));
     points.forEach((p, i) => {
       if (i % step !== 0 && i !== points.length - 1) return;
+      ctx.fillText(p.label, x(i), padT + plotH + 6);
+    });
+  }
+
+  function drawMultiLineChart(canvas, series) {
+    const { ctx, width, height } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, width, height);
+    const withData = (series || []).filter((s) => s.points && s.points.length > 0);
+    if (withData.length === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '13px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('記録がまだありません', width / 2, height / 2);
+      return;
+    }
+    const padL = 54, padR = 14, padT = 16, padB = 26;
+    const plotW = width - padL - padR;
+    const plotH = height - padT - padB;
+    const pointCount = withData[0].points.length;
+
+    const allValues = withData.flatMap((s) => s.points.map((p) => p.value));
+    const axis = computeAxis(allValues);
+    const niceMin = axis.niceMin;
+    const niceRange = (axis.niceMax - axis.niceMin) || 1;
+
+    const x = (i) => padL + (pointCount === 1 ? plotW / 2 : (i / (pointCount - 1)) * plotW);
+    const y = (v) => padT + plotH - ((v - niceMin) / niceRange) * plotH;
+
+    drawAxisGrid(ctx, axis, padL, padR, width, y);
+
+    withData.forEach((s) => {
+      ctx.beginPath();
+      s.points.forEach((p, i) => {
+        const px = x(i), py = y(p.value);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      s.points.forEach((p, i) => {
+        const px = x(i), py = y(p.value);
+        ctx.beginPath();
+        ctx.arc(px, py, i === s.points.length - 1 ? 3.5 : 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#0b1220';
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 1.5;
+        ctx.fill();
+        ctx.stroke();
+      });
+    });
+
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const maxLabels = Math.max(2, Math.floor(plotW / 56));
+    const step = Math.max(1, Math.ceil(pointCount / maxLabels));
+    withData[0].points.forEach((p, i) => {
+      if (i % step !== 0 && i !== pointCount - 1) return;
       ctx.fillText(p.label, x(i), padT + plotH + 6);
     });
   }
@@ -198,5 +281,5 @@ const Charts = (() => {
     ctx.fillText('合計', cx, cy + 12);
   }
 
-  return { drawLineChart, drawBreakdownBars, drawPieChart, formatYen, formatYenShort, hexToRgba };
+  return { drawLineChart, drawMultiLineChart, drawBreakdownBars, drawPieChart, formatYen, formatYenShort, hexToRgba };
 })();
