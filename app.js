@@ -371,14 +371,18 @@ function renderRecordView() {
   const empty = document.getElementById('record-empty');
   const groupsEl = document.getElementById('record-groups');
   const saveBtn = document.getElementById('btn-save-record');
+  const deleteBtn = document.getElementById('btn-delete-month');
   if (STATE.accounts.length === 0) {
     empty.classList.remove('hidden');
     groupsEl.innerHTML = '';
     saveBtn.classList.add('hidden');
+    deleteBtn.classList.add('hidden');
     return;
   }
   empty.classList.add('hidden');
   saveBtn.classList.remove('hidden');
+  const hasRecordsThisMonth = STATE.records.some((r) => r.yearMonth === recordViewYm);
+  deleteBtn.classList.toggle('hidden', !hasRecordsThisMonth);
 
   groupsEl.innerHTML = '';
   categories().forEach((cat) => {
@@ -423,6 +427,14 @@ document.getElementById('btn-save-record').addEventListener('click', async () =>
   await persist();
   showToast(`${ymLabelFull(recordViewYm)}の記録を保存しました`);
   switchView('home');
+});
+document.getElementById('btn-delete-month').addEventListener('click', async () => {
+  const ok = await confirmDialog('この月の記録を削除しますか？', `${ymLabelFull(recordViewYm)}に記録した全口座のデータを削除します。この操作は取り消せません。`, '削除する');
+  if (!ok) return;
+  STATE.records = STATE.records.filter((r) => r.yearMonth !== recordViewYm);
+  await persist();
+  showToast(`${ymLabelFull(recordViewYm)}の記録を削除しました`);
+  renderRecordView();
 });
 
 // ---------- 履歴画面 ----------

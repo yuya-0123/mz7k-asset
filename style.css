@@ -26,8 +26,12 @@ html, body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
   height: 100%;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  overflow: hidden;
 }
-body { min-height: 100dvh; display: flex; flex-direction: column; }
+body { display: flex; flex-direction: column; }
 
 button, input, select { font-family: inherit; }
 button { -webkit-appearance: none; appearance: none; }
@@ -35,7 +39,7 @@ button { -webkit-appearance: none; appearance: none; }
 .screen { display: none; flex: 1; flex-direction: column; min-height: 0; }
 .screen.active { display: flex; }
 
-.app-shell { flex: 1; display: flex; flex-direction: column; min-height: 100dvh; }
+.app-shell { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
 .topbar {
   padding: calc(var(--safe-top) + 14px) 18px 12px;
