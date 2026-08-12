@@ -878,18 +878,21 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 document.getElementById('btn-force-update').addEventListener('click', async () => {
   const ok = await confirmDialog('最新版に更新しますか？', 'アプリの表示・機能だけを最新の状態に更新します。口座データや記録、PINなどは一切削除されません。', '更新する', false);
   if (!ok) return;
-  try {
-    if ('serviceWorker' in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map((r) => r.unregister()));
+  const cleanup = (async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch (e) {
+      // 一部失敗しても reload は試みる
     }
-    if ('caches' in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((k) => caches.delete(k)));
-    }
-  } catch (e) {
-    // 一部失敗しても reload は試みる
-  }
+  })();
+  await Promise.race([cleanup, new Promise((resolve) => setTimeout(resolve, 2500))]);
   location.reload();
 });
 

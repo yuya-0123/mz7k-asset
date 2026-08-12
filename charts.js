@@ -43,9 +43,13 @@ const Charts = (() => {
   }
 
   function computeAxis(allValues, targetLines = 4) {
-    let min = Math.min(...allValues, 0);
-    let max = Math.max(...allValues, 1);
-    if (min === max) { min -= 1; max += 1; }
+    let min = Math.min(...allValues);
+    let max = Math.max(...allValues);
+    if (min === max) {
+      const pad = niceStep(Math.max(1, Math.abs(min) * 0.1));
+      min -= pad;
+      max += pad;
+    }
     const step = niceStep((max - min) / targetLines);
     const niceMin = Math.floor(min / step) * step;
     const niceMax = Math.ceil(max / step) * step;
