@@ -393,8 +393,7 @@ function renderRecordView() {
     card.innerHTML = `<h3>${escapeHtml(cat.label)}</h3>`;
     accs.forEach((acc) => {
       const existing = STATE.records.find((r) => r.accountId === acc.id && r.yearMonth === recordViewYm);
-      const fallback = latestKnownBalance(acc.id, ymAdd(recordViewYm, -1));
-      const prefill = existing ? existing.balance : (fallback !== null ? fallback : '');
+      const prefill = existing ? existing.balance : '';
       const row = document.createElement('div');
       row.className = 'amount-row';
       row.innerHTML = `
