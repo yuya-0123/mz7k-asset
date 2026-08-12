@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>資産トラッカー</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="資産トラッカー">
+<meta name="theme-color" content="#0b1220">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- 初回セットアップ(PIN作成) -->
+  <div id="screen-setup" class="screen active">
+    <div class="centered-screen">
+      <div class="brand-icon">📊</div>
+      <h2 id="setup-heading">資産トラッカーへようこそ</h2>
+      <p id="setup-desc">NISA・銀行・企業型DC・暗号資産をまとめて記録し、資産の推移をグラフで確認できます。<br>データはこの端末だけに暗号化して保存され、外部には送信されません。<br><br><b style="color:var(--danger)">PIN(4〜8桁の数字)を作成してください。PINを忘れるとデータは復元できません。</b></p>
+      <div class="pin-dots" id="setup-pin-dots"></div>
+      <div class="error-text" id="setup-error"></div>
+      <div class="keypad" id="setup-keypad"></div>
+    </div>
+  </div>
+
+  <!-- Face ID/Touch ID 有効化の提案 -->
+  <div id="screen-biometric-offer" class="screen">
+    <div class="centered-screen">
+      <div class="brand-icon">🔓</div>
+      <h2>Face ID / Touch ID で解除しますか？</h2>
+      <p>対応端末では、次回以降PIN入力なしで素早くロック解除できます。PINは変わらず使えます。</p>
+      <button class="btn" id="btn-enable-biometric">有効にする</button>
+      <button class="btn ghost" id="btn-skip-biometric">あとで設定する</button>
+    </div>
+  </div>
+
+  <!-- ロック解除 -->
+  <div id="screen-unlock" class="screen">
+    <div class="centered-screen">
+      <div class="brand-icon">🔒</div>
+      <h2>ロック中</h2>
+      <div class="pin-dots" id="unlock-pin-dots"></div>
+      <div class="error-text" id="unlock-error"></div>
+      <div class="keypad" id="unlock-keypad"></div>
+      <button class="btn ghost hidden" id="btn-use-biometric">Face ID / Touch ID で解除</button>
+    </div>
+  </div>
+
+  <!-- メイン -->
+  <div id="screen-main" class="screen">
+    <div class="topbar">
+      <h1 id="topbar-title">ホーム</h1>
+      <button class="icon-btn" id="btn-lock">🔒</button>
+    </div>
+    <div class="content">
+      <div id="view-home" class="view">
+        <div id="home-banner-slot"></div>
+        <div class="card">
+          <h3>現在の資産合計</h3>
+          <div class="total-figure" id="home-total">¥0</div>
+          <div class="total-sub" id="home-delta"></div>
+        </div>
+        <div class="card">
+          <h3>推移</h3>
+          <canvas class="chart" id="home-trend-chart"></canvas>
+        </div>
+        <div class="card">
+          <h3>資産配分（<span id="home-breakdown-month"></span>）</h3>
+          <div style="display:flex;align-items:center;gap:16px;">
+            <canvas id="home-pie-chart" width="140" height="140" style="width:140px;height:140px;flex-shrink:0;"></canvas>
+            <div id="home-pie-legend" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:9px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-record" class="view hidden">
+        <div class="month-nav">
+          <button id="record-prev-month">‹</button>
+          <div class="label" id="record-month-label">-</div>
+          <button id="record-next-month">›</button>
+        </div>
+        <div id="record-empty" class="empty-state hidden">口座がまだ登録されていません。「口座」タブから追加してください。</div>
+        <div id="record-groups"></div>
+        <button class="btn hidden" id="btn-save-record" style="margin-top:10px;">この月の記録を保存</button>
+      </div>
+
+      <div id="view-history" class="view hidden">
+        <div class="category-picker" id="history-series-picker" style="margin-bottom:12px;"></div>
+        <div class="card">
+          <div class="total-sub" id="history-series-delta" style="margin-bottom:8px;"></div>
+          <canvas class="chart tall" id="history-trend-chart"></canvas>
+        </div>
+        <div class="section-title">記録済みの月</div>
+        <div id="history-list"></div>
+      </div>
+
+      <div id="view-accounts" class="view hidden">
+        <button class="btn" id="btn-add-account" style="margin-bottom:14px;">＋ 口座を追加</button>
+        <div id="accounts-list"></div>
+      </div>
+
+      <div id="view-settings" class="view hidden">
+        <div class="card">
+          <h3>カテゴリ管理</h3>
+          <div id="categories-list"></div>
+          <button class="btn secondary small" id="btn-add-category" style="margin-top:6px;">＋ カテゴリを追加</button>
+        </div>
+        <div class="card">
+          <h3>リマインダー</h3>
+          <div class="field" style="margin-bottom:0;">
+            <label>毎月この日以降、未記録なら画面上部に通知します</label>
+            <input type="number" id="setting-reminder-day" min="1" max="28">
+          </div>
+        </div>
+        <div class="card">
+          <div class="toggle-row">
+            <div class="txt"><b>Face ID / Touch ID</b><span id="biometric-status-text">確認中…</span></div>
+            <div class="switch" id="biometric-switch"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="link-row tappable" id="btn-change-pin"><span>PINを変更</span><span class="chev">›</span></div>
+          <div class="link-row tappable" id="btn-export-backup"><span>バックアップを書き出す</span><span class="chev">›</span></div>
+          <div class="link-row tappable" id="btn-import-backup"><span>バックアップを読み込む</span><span class="chev">›</span></div>
+          <input type="file" id="import-file-input" accept="application/json" class="hidden">
+        </div>
+        <button class="btn danger" id="btn-wipe-all">全データを削除してリセット</button>
+        <button class="btn ghost" id="btn-lock-now" style="margin-top:14px;">今すぐロック</button>
+        <p style="text-align:center;color:var(--text-faint);font-size:11.5px;margin-top:20px;line-height:1.6;">データは暗号化されこの端末にのみ保存されます。<br>サーバーへの送信は一切行いません。</p>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <button data-view="home" class="active"><span class="ico">🏠</span>ホーム</button>
+      <button data-view="record"><span class="ico">✏️</span>記録</button>
+      <button data-view="history"><span class="ico">📈</span>履歴</button>
+      <button data-view="accounts"><span class="ico">🏦</span>口座</button>
+      <button data-view="settings"><span class="ico">⚙️</span>設定</button>
+    </div>
+  </div>
+
+</div>
+
+<div id="modal-root"></div>
+<div id="toast" class="toast"></div>
+
+<script src="crypto.js"></script>
+<script src="storage.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
