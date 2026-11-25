@@ -478,7 +478,7 @@ function renderHistorySeriesPicker() {
   if (!seriesList.some((s) => s.id === historySelectedSeries)) historySelectedSeries = 'total';
   picker.innerHTML = seriesList.map((s) => `<button type="button" data-series="${s.id}" class="${s.id === historySelectedSeries ? 'selected' : ''}">${escapeHtml(s.label)}</button>`).join('');
   picker.querySelectorAll('button').forEach((b) => {
-    b.addEventListener('click', () => { historySelectedSeries = b.dataset.series; renderHistoryChart(); renderHistorySeriesPicker(); });
+    b.addEventListener('click', () => { historySelectedSeries = b.dataset.series; renderHistoryChart(); renderHistorySeriesPicker(); renderHistoryList(); });
   });
 }
 function renderHistoryChart() {
@@ -509,23 +509,41 @@ function renderHistoryChart() {
   const points = months.map((ym) => ({ label: ymLabelShort(ym), value: valueForMonth(ym) }));
   Charts.drawLineChart(document.getElementById('history-trend-chart'), points, series.color);
 
-  if (points.length >= 2) {
-    const diff = points[points.length - 1].value - points[0].value;
-    const sign = diff > 0 ? '+' : '';
-    deltaEl.textContent = `${ymLabelFull(months[0])} → ${ymLabelFull(months[months.length - 1])}　${sign}${Charts.formatYen(diff)}`;
-    deltaEl.className = 'total-sub ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '');
-  } else if (points.length === 1) {
-    deltaEl.textContent = `${ymLabelFull(months[0])}時点　${Charts.formatYen(points[0].value)}`;
-    deltaEl.className = 'total-sub';
-  } else {
+  // 収支: 最新の記録がある年の増減。基準は前年最後の記録(なければその年最初の記録)。
+  const seriesMonths = months.filter((ym) => seriesHasRecord(series.id, ym));
+  if (seriesMonths.length === 0) {
     deltaEl.textContent = '';
     deltaEl.className = 'total-sub';
+    return;
   }
+  const lastYm = seriesMonths[seriesMonths.length - 1];
+  const year = lastYm.slice(0, 4);
+  const prevYearMonths = seriesMonths.filter((ym) => ym.slice(0, 4) < year);
+  const baseYm = prevYearMonths.length ? prevYearMonths[prevYearMonths.length - 1] : seriesMonths.find((ym) => ym.slice(0, 4) === year);
+  if (baseYm === lastYm) {
+    deltaEl.textContent = `${ymLabelFull(lastYm)}時点　${Charts.formatYen(valueForMonth(lastYm))}`;
+    deltaEl.className = 'total-sub';
+    return;
+  }
+  const diff = valueForMonth(lastYm) - valueForMonth(baseYm);
+  const sign = diff > 0 ? '+' : '';
+  deltaEl.textContent = `${Number(year)}年の増減（${ymLabelFull(baseYm)} → ${ymLabelFull(lastYm)}）　${sign}${Charts.formatYen(diff)}`;
+  deltaEl.className = 'total-sub ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '');
+}
+function seriesHasRecord(seriesId, ym) {
+  if (seriesId === 'total' || seriesId === 'all') return STATE.records.some((r) => r.yearMonth === ym);
+  const accIds = new Set(STATE.accounts.filter((a) => a.category === seriesId).map((a) => a.id));
+  return STATE.records.some((r) => r.yearMonth === ym && accIds.has(r.accountId));
 }
 function renderHistory() {
   renderHistorySeriesPicker();
   renderHistoryChart();
-  const months = recordedMonths();
+  renderHistoryList();
+}
+function renderHistoryList() {
+  const seriesId = historySelectedSeries;
+  const valueFor = (ym) => (seriesId === 'total' || seriesId === 'all' ? totalForMonth(ym) : categoryTotalForMonth(seriesId, ym));
+  const months = recordedMonths().filter((ym) => seriesHasRecord(seriesId, ym));
 
   const list = document.getElementById('history-list');
   list.innerHTML = '';
@@ -534,9 +552,9 @@ function renderHistory() {
     return;
   }
   months.slice().reverse().forEach((ym, i, arr) => {
-    const total = totalForMonth(ym);
+    const total = valueFor(ym);
     const idx = months.indexOf(ym);
-    const prevTotal = idx > 0 ? totalForMonth(months[idx - 1]) : null;
+    const prevTotal = idx > 0 ? valueFor(months[idx - 1]) : null;
     const row = document.createElement('div');
     row.className = 'list-row tappable';
     let deltaHtml = '';
@@ -547,8 +565,11 @@ function renderHistory() {
     }
     const recordedAt = lastRecordedAtForMonth(ym);
     const recordedHtml = recordedAt ? `<div class="meta">${formatRecordedDate(recordedAt)}</div>` : '';
+    const breakdownHtml = seriesId === 'all'
+      ? `<div class="meta">${breakdownForMonth(ym).map((b) => `<span style="color:${b.color}">●</span>${escapeHtml(b.label)} ${Charts.formatYenShort(b.value)}`).join('　')}</div>`
+      : '';
     row.innerHTML = `
-      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${deltaHtml}${recordedHtml}</div></div>
+      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${deltaHtml}${breakdownHtml}${recordedHtml}</div></div>
       <div class="value">${Charts.formatYen(total)}</div>
     `;
     row.addEventListener('click', () => { recordViewYm = ym; switchView('record'); });
