@@ -284,6 +284,13 @@ function latestKnownBalance(accountId, uptoYmExclusiveOrInclusive) {
   const recs = STATE.records.filter((r) => r.accountId === accountId && r.yearMonth <= uptoYmExclusiveOrInclusive).sort((a, b) => (a.yearMonth < b.yearMonth ? 1 : -1));
   return recs.length ? recs[0].balance : null;
 }
+// カテゴリ内の口座ごとの内訳（その月に記録がある口座だけ、口座の登録順）
+function accountBreakdownForMonth(catId, ym) {
+  return STATE.accounts.filter((a) => a.category === catId).map((a) => {
+    const rec = STATE.records.find((r) => r.yearMonth === ym && r.accountId === a.id);
+    return rec ? { label: a.name, value: rec.balance } : null;
+  }).filter(Boolean);
+}
 function categoryTotalForMonth(catId, ym) {
   const accIds = new Set(STATE.accounts.filter((a) => a.category === catId).map((a) => a.id));
   return STATE.records.filter((r) => r.yearMonth === ym && accIds.has(r.accountId)).reduce((s, r) => s + r.balance, 0);
@@ -680,8 +687,9 @@ function renderHistoryList() {
     const deltaHtml = prevTotal !== null ? `<div class="meta" style="color:${diffColor(total - prevTotal)}">${signed(total - prevTotal)}</div>` : '';
     const recordedAt = lastRecordedAtForMonth(ym);
     const recordedHtml = recordedAt ? `<div class="meta">${formatRecordedDate(recordedAt)}</div>` : '';
-    const breakdownHtml = seriesId === 'total'
-      ? `<div class="meta breakdown">${breakdownForMonth(ym).map((b) => `<span><span style="color:${b.color}">●</span>${escapeHtml(b.label)} ${Charts.formatYenShort(b.value)}</span>`).join('')}</div>`
+    const items = seriesId === 'total' ? breakdownForMonth(ym) : accountBreakdownForMonth(seriesId, ym);
+    const breakdownHtml = (seriesId === 'total' || items.length >= 2)
+      ? `<div class="meta breakdown">${items.map((b) => `<span>${b.color ? `<span style="color:${b.color}">●</span>` : ''}${escapeHtml(b.label)} ${Charts.formatYenShort(b.value)}</span>`).join('')}</div>`
       : '';
     row.innerHTML = `
       <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${breakdownHtml}${recordedHtml}</div></div>
@@ -1014,7 +1022,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.6.6';
+const APP_VERSION = '1.6.7';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function checkAppVersion() {
   document.getElementById('version-current').textContent = `v${APP_VERSION}`;
