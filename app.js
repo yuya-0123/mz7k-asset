@@ -548,7 +548,7 @@ function renderHistoryChart() {
   }
   const diff = valueForMonth(lastYm) - valueForMonth(baseYm);
   const sign = diff > 0 ? '+' : '';
-  deltaEl.textContent = `${Number(year)}年の増減（${ymLabelFull(baseYm)} → ${ymLabelFull(lastYm)}）　${sign}${Charts.formatYen(diff)}`;
+  deltaEl.textContent = `${Number(year)}年の増減（${baseYm.slice(2, 4)}年${Number(baseYm.slice(5, 7))}月比）　${sign}${Charts.formatYen(diff)}`;
   deltaEl.className = 'total-sub ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '');
 }
 function seriesHasRecord(seriesId, ym) {

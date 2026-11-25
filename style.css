@@ -56,6 +56,10 @@ button { -webkit-appearance: none; appearance: none; }
 .content.no-scroll .view .chart-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .content.no-scroll .view .chart-card canvas.chart { flex: 1; width: 100%; height: 100% !important; min-height: 40px; }
 .content.no-scroll .view .chart-card canvas.chart.tall { height: 100% !important; }
+/* 履歴はグラフを小さく固定して、リストに高さを回す */
+.content.no-scroll #view-history .chart-card { flex: 0 0 auto; }
+#history-legend:empty { display: none; }
+.content.no-scroll #view-history .chart-card canvas.chart.tall { flex: none; height: 140px !important; }
 .content.no-scroll #view-history .history-list-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .content.no-scroll #view-history .history-list-wrap .section-title { flex-shrink: 0; }
 .content.no-scroll #view-history #history-list { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
