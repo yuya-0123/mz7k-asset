@@ -487,16 +487,15 @@ function usedCategories() {
 }
 function historySeriesOrder() {
   const catIds = new Set(usedCategories().map((c) => c.id));
-  const validIds = new Set(['total', 'all', ...catIds]);
+  const validIds = new Set(['total', ...catIds]);
   let order = (STATE.settings.historySeriesOrder || []).filter((id) => validIds.has(id));
   if (!order.includes('total')) order.unshift('total');
-  if (!order.includes('all')) { const i = order.indexOf('total'); order.splice(i + 1, 0, 'all'); }
   validIds.forEach((id) => { if (!order.includes(id)) order.push(id); });
   STATE.settings.historySeriesOrder = order;
   return order;
 }
 function historySeriesList() {
-  const dict = { total: { id: 'total', label: '総額', color: '#4f9dff' }, all: { id: 'all', label: 'すべて', color: '#a1a1aa' } };
+  const dict = { total: { id: 'total', label: '総額', color: '#4f9dff' } };
   usedCategories().forEach((c) => { dict[c.id] = c; });
   return historySeriesOrder().map((id) => dict[id]).filter(Boolean);
 }
@@ -525,21 +524,6 @@ function renderHistoryChart() {
   const deltaEl = document.getElementById('history-series-delta');
   const legendEl = document.getElementById('history-legend');
 
-  if (series.id === 'all') {
-    const catSeries = usedCategories().map((c) => ({
-      label: c.label,
-      color: c.color,
-      points: months.map((ym) => ({ label: ymLabelShort(ym), value: categoryTotalForMonth(c.id, ym) })),
-    }));
-    Charts.drawMultiLineChart(document.getElementById('history-trend-chart'), catSeries);
-    deltaEl.textContent = 'カテゴリ別の推移';
-    deltaEl.className = 'total-sub';
-    legendEl.innerHTML = catSeries.map((s) => `
-      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);">
-        <span style="width:9px;height:9px;border-radius:50%;background:${s.color};flex-shrink:0;"></span>${escapeHtml(s.label)}
-      </div>`).join('');
-    return;
-  }
   legendEl.innerHTML = '';
 
   const valueForMonth = (ym) => (series.id === 'total' ? totalForMonth(ym) : categoryTotalForMonth(series.id, ym));
@@ -568,7 +552,7 @@ function renderHistoryChart() {
   deltaEl.className = 'total-sub ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '');
 }
 function seriesHasRecord(seriesId, ym) {
-  if (seriesId === 'total' || seriesId === 'all') return STATE.records.some((r) => r.yearMonth === ym);
+  if (seriesId === 'total') return STATE.records.some((r) => r.yearMonth === ym);
   const accIds = new Set(STATE.accounts.filter((a) => a.category === seriesId).map((a) => a.id));
   return STATE.records.some((r) => r.yearMonth === ym && accIds.has(r.accountId));
 }
@@ -577,9 +561,11 @@ function renderHistory() {
   renderHistoryChart();
   renderHistoryList();
 }
+// 記録済みの月: 年ごとにまとめて新しい順。開いている年は historyOpenYears で覚える(初期は最新の年だけ開く)。
+let historyOpenYears = null;
 function renderHistoryList() {
   const seriesId = historySelectedSeries;
-  const valueFor = (ym) => (seriesId === 'total' || seriesId === 'all' ? totalForMonth(ym) : categoryTotalForMonth(seriesId, ym));
+  const valueFor = (ym) => (seriesId === 'total' ? totalForMonth(ym) : categoryTotalForMonth(seriesId, ym));
   const months = recordedMonths().filter((ym) => seriesHasRecord(seriesId, ym));
 
   const list = document.getElementById('history-list');
@@ -588,29 +574,53 @@ function renderHistoryList() {
     list.innerHTML = '<div class="empty-state">まだ記録がありません。「記録」タブから最初の月を記録しましょう。</div>';
     return;
   }
-  months.slice().reverse().forEach((ym, i, arr) => {
-    const total = valueFor(ym);
-    const idx = months.indexOf(ym);
-    const prevTotal = idx > 0 ? valueFor(months[idx - 1]) : null;
-    const row = document.createElement('div');
-    row.className = 'list-row tappable';
-    let deltaHtml = '';
-    if (prevTotal !== null) {
-      const diff = total - prevTotal;
-      const sign = diff > 0 ? '+' : '';
-      deltaHtml = `<span class="meta" style="color:${diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text-faint)'}">${sign}${Charts.formatYenShort(diff)}</span>`;
-    }
-    const recordedAt = lastRecordedAtForMonth(ym);
-    const recordedHtml = recordedAt ? `<div class="meta">${formatRecordedDate(recordedAt)}</div>` : '';
-    const breakdownHtml = seriesId === 'all'
-      ? `<div class="meta">${breakdownForMonth(ym).map((b) => `<span style="color:${b.color}">●</span>${escapeHtml(b.label)} ${Charts.formatYenShort(b.value)}`).join('　')}</div>`
-      : '';
-    row.innerHTML = `
-      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${deltaHtml}${breakdownHtml}${recordedHtml}</div></div>
-      <div class="value">${Charts.formatYen(total)}</div>
-    `;
-    row.addEventListener('click', () => { recordViewYm = ym; switchView('record'); });
-    list.appendChild(row);
+  const years = Array.from(new Set(months.map((ym) => ym.slice(0, 4)))).sort().reverse();
+  if (!historyOpenYears) historyOpenYears = new Set([years[0]]);
+  const diffColor = (d) => (d > 0 ? 'var(--success)' : d < 0 ? 'var(--danger)' : 'var(--text-faint)');
+  const signed = (d) => `${d > 0 ? '+' : ''}${Charts.formatYenShort(d)}`;
+
+  years.forEach((year) => {
+    const yMonths = months.filter((ym) => ym.slice(0, 4) === year);
+    const lastYm = yMonths[yMonths.length - 1];
+    const prevYear = months.filter((ym) => ym.slice(0, 4) < year);
+    const baseYm = prevYear.length ? prevYear[prevYear.length - 1] : yMonths[0];
+    const yearDiff = valueFor(lastYm) - valueFor(baseYm);
+    const open = historyOpenYears.has(year);
+
+    const header = document.createElement('div');
+    header.className = 'history-year tappable';
+    header.innerHTML = `
+      <div><span class="chev">${open ? '▾' : '▸'}</span>${year}年 <span class="meta">${yMonths.length}か月</span></div>
+      <div style="text-align:right;">
+        <div class="value">${Charts.formatYen(valueFor(lastYm))}</div>
+        ${baseYm !== lastYm ? `<div class="meta" style="color:${diffColor(yearDiff)}">年間 ${signed(yearDiff)}</div>` : ''}
+      </div>`;
+    header.addEventListener('click', () => {
+      if (historyOpenYears.has(year)) historyOpenYears.delete(year); else historyOpenYears.add(year);
+      renderHistoryList();
+    });
+    list.appendChild(header);
+    if (!open) return;
+
+    yMonths.slice().reverse().forEach((ym) => {
+      const total = valueFor(ym);
+      const idx = months.indexOf(ym);
+      const prevTotal = idx > 0 ? valueFor(months[idx - 1]) : null;
+      const row = document.createElement('div');
+      row.className = 'list-row tappable';
+      const deltaHtml = prevTotal !== null ? `<span class="meta" style="color:${diffColor(total - prevTotal)}">${signed(total - prevTotal)}</span>` : '';
+      const recordedAt = lastRecordedAtForMonth(ym);
+      const recordedHtml = recordedAt ? `<div class="meta">${formatRecordedDate(recordedAt)}</div>` : '';
+      const breakdownHtml = seriesId === 'total'
+        ? `<div class="meta breakdown">${breakdownForMonth(ym).map((b) => `<span><span style="color:${b.color}">●</span>${escapeHtml(b.label)} ${Charts.formatYenShort(b.value)}</span>`).join('')}</div>`
+        : '';
+      row.innerHTML = `
+        <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${deltaHtml}${breakdownHtml}${recordedHtml}</div></div>
+        <div class="value">${Charts.formatYen(total)}</div>
+      `;
+      row.addEventListener('click', () => { recordViewYm = ym; switchView('record'); });
+      list.appendChild(row);
+    });
   });
 }
 
@@ -791,7 +801,7 @@ function openCategoryModal(existing) {
 
 function renderHistoryOrderSettings() {
   const list = document.getElementById('history-order-list');
-  const dict = { total: { id: 'total', label: '総額' }, all: { id: 'all', label: 'すべて' } };
+  const dict = { total: { id: 'total', label: '総額' } };
   usedCategories().forEach((c) => { dict[c.id] = c; });
   const order = historySeriesOrder();
   list.innerHTML = order.map((id, i) => `

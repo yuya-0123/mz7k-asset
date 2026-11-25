@@ -30,7 +30,7 @@ const Storage = (() => {
       accounts: [],
       records: [],
       categories: defaultCategories(),
-      settings: { reminderDay: 25, hideAmounts: false, autoBackup: true, historySeriesOrder: ['total', 'all'], createdAt: new Date().toISOString() },
+      settings: { reminderDay: 25, hideAmounts: false, autoBackup: true, historySeriesOrder: ['total'], createdAt: new Date().toISOString() },
     };
   }
 
@@ -39,7 +39,7 @@ const Storage = (() => {
     if (!state.settings) state.settings = { reminderDay: 25, createdAt: new Date().toISOString() };
     if (typeof state.settings.hideAmounts !== 'boolean') state.settings.hideAmounts = false;
     if (typeof state.settings.autoBackup !== 'boolean') state.settings.autoBackup = true;
-    if (!Array.isArray(state.settings.historySeriesOrder)) state.settings.historySeriesOrder = ['total', 'all'];
+    if (!Array.isArray(state.settings.historySeriesOrder)) state.settings.historySeriesOrder = ['total'];
     if (!state.accounts) state.accounts = [];
     if (!state.records) state.records = [];
     return state;
