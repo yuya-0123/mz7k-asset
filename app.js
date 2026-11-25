@@ -531,7 +531,10 @@ function shiftHistoryYear(dir) {
   if (i < 0 || j < 0 || j >= years.length) return;
   historyYear = years[j];
   renderHistoryChart();
+  renderHistoryList();
 }
+document.getElementById('history-list-prev').addEventListener('click', () => shiftHistoryYear(-1));
+document.getElementById('history-list-next').addEventListener('click', () => shiftHistoryYear(1));
 document.getElementById('history-year-prev').addEventListener('click', () => shiftHistoryYear(-1));
 document.getElementById('history-year-next').addEventListener('click', () => shiftHistoryYear(1));
 document.querySelectorAll('#history-mode-picker button').forEach((b) => {
@@ -644,66 +647,57 @@ function renderHistory() {
   renderHistoryChart();
   renderHistoryList();
 }
-// 記録済みの月: 年ごとにまとめて新しい順。開いている年は historyOpenYears で覚える(初期は最新の年だけ開く)。
-let historyOpenYears = null;
+// 記録済みの月: グラフと同じ年(historyYear)の月だけを新しい順に表示。年の見出しは固定で、‹ › で年を切替。
 function renderHistoryList() {
   const seriesId = historySelectedSeries;
   const valueFor = (ym) => (seriesId === 'total' ? totalForMonth(ym) : categoryTotalForMonth(seriesId, ym));
   const months = recordedMonths().filter((ym) => seriesHasRecord(seriesId, ym));
-
   const list = document.getElementById('history-list');
+  const head = document.getElementById('history-list-head');
   list.innerHTML = '';
+  list.scrollTop = 0;
   if (months.length === 0) {
+    head.classList.add('hidden');
     list.innerHTML = '<div class="empty-state">まだ記録がありません。「記録」タブから最初の月を記録しましょう。</div>';
     return;
   }
-  const years = Array.from(new Set(months.map((ym) => ym.slice(0, 4)))).sort().reverse();
-  if (!historyOpenYears) historyOpenYears = new Set([years[0]]);
+  head.classList.remove('hidden');
+  const years = historyYears(seriesId);
+  if (!years.includes(historyYear)) historyYear = years[years.length - 1];
+  const yi = years.indexOf(historyYear);
+  document.getElementById('history-list-year').textContent = `${historyYear}年`;
+  document.getElementById('history-list-prev').disabled = yi <= 0;
+  document.getElementById('history-list-next').disabled = yi >= years.length - 1;
+
   const diffColor = (d) => (d > 0 ? 'var(--success)' : d < 0 ? 'var(--danger)' : 'var(--text-faint)');
   const signed = (d) => `${d > 0 ? '+' : ''}${Charts.formatYenShort(d)}`;
+  const yMonths = months.filter((ym) => ym.slice(0, 4) === historyYear);
+  const lastYm = yMonths[yMonths.length - 1];
+  const prevYear = months.filter((ym) => ym.slice(0, 4) < historyYear);
+  const baseYm = prevYear.length ? prevYear[prevYear.length - 1] : yMonths[0];
+  const yearDiff = valueFor(lastYm) - valueFor(baseYm);
+  document.getElementById('history-list-summary').innerHTML = `
+    <div class="value">${Charts.formatYen(valueFor(lastYm))}</div>
+    ${baseYm !== lastYm ? `<div class="meta" style="color:${diffColor(yearDiff)}">年間 ${signed(yearDiff)}</div>` : ''}`;
 
-  years.forEach((year) => {
-    const yMonths = months.filter((ym) => ym.slice(0, 4) === year);
-    const lastYm = yMonths[yMonths.length - 1];
-    const prevYear = months.filter((ym) => ym.slice(0, 4) < year);
-    const baseYm = prevYear.length ? prevYear[prevYear.length - 1] : yMonths[0];
-    const yearDiff = valueFor(lastYm) - valueFor(baseYm);
-    const open = historyOpenYears.has(year);
-
-    const header = document.createElement('div');
-    header.className = 'history-year tappable';
-    header.innerHTML = `
-      <div><span class="chev">${open ? '▾' : '▸'}</span>${year}年 <span class="meta">${yMonths.length}か月</span></div>
-      <div style="text-align:right;">
-        <div class="value">${Charts.formatYen(valueFor(lastYm))}</div>
-        ${baseYm !== lastYm ? `<div class="meta" style="color:${diffColor(yearDiff)}">年間 ${signed(yearDiff)}</div>` : ''}
-      </div>`;
-    header.addEventListener('click', () => {
-      if (historyOpenYears.has(year)) historyOpenYears.delete(year); else historyOpenYears.add(year);
-      renderHistoryList();
-    });
-    list.appendChild(header);
-    if (!open) return;
-
-    yMonths.slice().reverse().forEach((ym) => {
-      const total = valueFor(ym);
-      const idx = months.indexOf(ym);
-      const prevTotal = idx > 0 ? valueFor(months[idx - 1]) : null;
-      const row = document.createElement('div');
-      row.className = 'list-row tappable';
-      const deltaHtml = prevTotal !== null ? `<span class="meta" style="color:${diffColor(total - prevTotal)}">${signed(total - prevTotal)}</span>` : '';
-      const recordedAt = lastRecordedAtForMonth(ym);
-      const recordedHtml = recordedAt ? `<div class="meta">${formatRecordedDate(recordedAt)}</div>` : '';
-      const breakdownHtml = seriesId === 'total'
-        ? `<div class="meta breakdown">${breakdownForMonth(ym).map((b) => `<span><span style="color:${b.color}">●</span>${escapeHtml(b.label)} ${Charts.formatYenShort(b.value)}</span>`).join('')}</div>`
-        : '';
-      row.innerHTML = `
-        <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${deltaHtml}${breakdownHtml}${recordedHtml}</div></div>
-        <div class="value">${Charts.formatYen(total)}</div>
-      `;
-      row.addEventListener('click', () => { recordViewYm = ym; switchView('record'); });
-      list.appendChild(row);
-    });
+  yMonths.slice().reverse().forEach((ym) => {
+    const total = valueFor(ym);
+    const idx = months.indexOf(ym);
+    const prevTotal = idx > 0 ? valueFor(months[idx - 1]) : null;
+    const row = document.createElement('div');
+    row.className = 'list-row tappable';
+    const deltaHtml = prevTotal !== null ? `<span class="meta" style="color:${diffColor(total - prevTotal)}">${signed(total - prevTotal)}</span>` : '';
+    const recordedAt = lastRecordedAtForMonth(ym);
+    const recordedHtml = recordedAt ? `<div class="meta">${formatRecordedDate(recordedAt)}</div>` : '';
+    const breakdownHtml = seriesId === 'total'
+      ? `<div class="meta breakdown">${breakdownForMonth(ym).map((b) => `<span><span style="color:${b.color}">●</span>${escapeHtml(b.label)} ${Charts.formatYenShort(b.value)}</span>`).join('')}</div>`
+      : '';
+    row.innerHTML = `
+      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${deltaHtml}${breakdownHtml}${recordedHtml}</div></div>
+      <div class="value">${Charts.formatYen(total)}</div>
+    `;
+    row.addEventListener('click', () => { recordViewYm = ym; switchView('record'); });
+    list.appendChild(row);
   });
 }
 
