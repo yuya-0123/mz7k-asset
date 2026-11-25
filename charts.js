@@ -203,7 +203,17 @@ const Charts = (() => {
   }
 
   // グラフをタップしたら、いちばん近い点を選んで吹き出しを出す（同じ点をもう一度タップで消す）
+  // グラフ以外の場所をタップしたら吹き出しを消す
+  const tapCharts = [];
+  document.addEventListener('click', (e) => {
+    tapCharts.forEach((c) => {
+      if (c === e.target || c._selIdx == null || !c._redraw) return;
+      c._selIdx = null;
+      c._redraw();
+    });
+  });
   function enableLineChartTap(canvas) {
+    tapCharts.push(canvas);
     canvas.addEventListener('click', (e) => {
       const pts = canvas._hitPoints || [];
       if (!pts.length || !canvas._redraw) return;
