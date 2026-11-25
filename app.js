@@ -12,6 +12,7 @@ function categoryById(id) {
 let CURRENT_KEY = null;
 let STATE = null;
 let recordViewYm = null;
+let recordShowHidden = false; // 記録タブで「記録画面に表示しない」口座も出すか
 let failedAttempts = 0;
 let lockUntilTs = 0;
 
@@ -250,7 +251,7 @@ function switchView(view) {
   document.getElementById('topbar-title').textContent = VIEW_TITLES[view];
   document.querySelector('.content').classList.toggle('no-scroll', view === 'home' || view === 'history' || view === 'record');
   if (view === 'home') renderHome();
-  if (view === 'record') { recordViewYm = recordViewYm || todayYm(); renderRecordView(); }
+  if (view === 'record') { recordViewYm = recordViewYm || todayYm(); recordShowHidden = false; renderRecordView(); }
   if (view === 'history') renderHistory();
   if (view === 'settings') renderSettings();
 }
@@ -535,8 +536,12 @@ function renderRecordView() {
   deleteBtn.classList.toggle('hidden', !hasRecordsThisMonth);
 
   groupsEl.innerHTML = '';
+  // 「記録画面に表示しない」口座は、その月に記録があるときか「非表示の口座も表示」を押したときだけ出す
+  const hasRec = (acc) => STATE.records.some((r) => r.accountId === acc.id && r.yearMonth === recordViewYm);
+  const visible = (acc) => !acc.hideInRecord || recordShowHidden || hasRec(acc);
+  const hiddenCount = STATE.accounts.filter((a) => !visible(a)).length;
   categories().forEach((cat) => {
-    const accs = STATE.accounts.filter((a) => a.category === cat.id);
+    const accs = STATE.accounts.filter((a) => a.category === cat.id && visible(a));
     if (accs.length === 0) return;
     const card = document.createElement('div');
     card.className = 'card';
@@ -554,9 +559,16 @@ function renderRecordView() {
     });
     groupsEl.appendChild(card);
   });
+  if (hiddenCount > 0) {
+    const more = document.createElement('button');
+    more.className = 'record-show-hidden';
+    more.textContent = `非表示の口座も表示（${hiddenCount}件）`;
+    more.addEventListener('click', () => { recordShowHidden = true; renderRecordView(); });
+    groupsEl.appendChild(more);
+  }
 }
-document.getElementById('record-prev-month').addEventListener('click', () => { recordViewYm = ymAdd(recordViewYm, -1); renderRecordView(); });
-document.getElementById('record-next-month').addEventListener('click', () => { recordViewYm = ymAdd(recordViewYm, 1); renderRecordView(); });
+document.getElementById('record-prev-month').addEventListener('click', () => { recordViewYm = ymAdd(recordViewYm, -1); recordShowHidden = false; renderRecordView(); });
+document.getElementById('record-next-month').addEventListener('click', () => { recordViewYm = ymAdd(recordViewYm, 1); recordShowHidden = false; renderRecordView(); });
 document.getElementById('btn-save-record').addEventListener('click', async () => {
   const inputs = document.querySelectorAll('#record-groups input[data-account-id]');
   const now = new Date().toISOString();
@@ -808,6 +820,7 @@ function renderAccounts() {
           <div>
             <div class="name">${escapeHtml(acc.name)}</div>
             ${acc.memo ? `<div class="meta">${escapeHtml(acc.memo)}</div>` : ''}
+            ${acc.hideInRecord ? '<div class="meta">記録画面に表示しない</div>' : ''}
           </div>
         </div>
         <div class="value small">${latest !== null ? Charts.formatYenShort(latest) : '未記録'}</div>
@@ -841,6 +854,10 @@ function openAccountModal(existing) {
       <label>メモ(任意)</label>
       <input type="text" id="acc-memo" value="${existing ? escapeHtml(existing.memo || '') : ''}" placeholder="メモ">
     </div>
+    <div class="toggle-row" style="padding-top:0;">
+      <div class="txt"><b>記録画面に表示しない</b><span>過去データ用の口座など。記録がある月や「非表示の口座も表示」を押したときだけ出ます</span></div>
+      <div class="switch ${existing && existing.hideInRecord ? 'on' : ''}" id="acc-hide-switch"></div>
+    </div>
     <button class="btn" id="acc-save" style="margin-bottom:10px;">保存</button>
     ${isEdit ? '<button class="btn danger" id="acc-delete" style="margin-bottom:10px;">この口座を削除</button>' : ''}
     <button class="btn secondary" id="acc-cancel">キャンセル</button>
@@ -853,15 +870,18 @@ function openAccountModal(existing) {
       b.classList.add('selected');
     });
   });
+  const hideSwitch = document.getElementById('acc-hide-switch');
+  hideSwitch.addEventListener('click', () => hideSwitch.classList.toggle('on'));
   document.getElementById('acc-cancel').addEventListener('click', closeModal);
   document.getElementById('acc-save').addEventListener('click', async () => {
+    const hideInRecord = hideSwitch.classList.contains('on');
     const name = document.getElementById('acc-name').value.trim();
     const memo = document.getElementById('acc-memo').value.trim();
     if (!name) { showToast('口座名を入力してください'); return; }
     if (isEdit) {
-      existing.name = name; existing.memo = memo; existing.category = selectedCat;
+      existing.name = name; existing.memo = memo; existing.category = selectedCat; existing.hideInRecord = hideInRecord;
     } else {
-      STATE.accounts.push({ id: uuid(), name, memo, category: selectedCat });
+      STATE.accounts.push({ id: uuid(), name, memo, category: selectedCat, hideInRecord });
     }
     await persist();
     closeModal();
@@ -1106,7 +1126,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.7.2';
+const APP_VERSION = '1.7.3';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
