@@ -75,9 +75,13 @@ const Charts = (() => {
   }
 
   // points[i].value が null の点は線を描かずに x 位置だけ確保する(1年分の枠を固定したいときなど)
-  function drawLineChart(canvas, points, color = '#4f9dff', masked = false, emptyText = '記録がまだありません') {
+  function drawLineChart(canvas, points, color = '#4f9dff', masked = false, emptyText = '記録がまだありません', keepSelection = false) {
     const { ctx, width, height } = setupCanvas(canvas);
     ctx.clearRect(0, 0, width, height);
+    // タップで点を選ぶと数値を吹き出しで表示する。データを描き直すときは選択を解除
+    if (!keepSelection) canvas._selIdx = null;
+    canvas._redraw = () => drawLineChart(canvas, points, color, masked, emptyText, true);
+    canvas._hitPoints = [];
     const idx = (points || []).map((p, i) => (p.value == null ? -1 : i)).filter((i) => i >= 0);
     if (idx.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
@@ -142,6 +146,8 @@ const Charts = (() => {
       ctx.stroke();
     });
 
+    canvas._hitPoints = idx.map((i) => ({ i, x: x(i), y: y(points[i].value) }));
+
     // x軸ラベル(間引き表示)
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     ctx.textAlign = 'center';
@@ -153,6 +159,60 @@ const Charts = (() => {
     points.forEach((p, i) => {
       if (explicit ? !p.showLabel : (i % step !== 0 && i !== points.length - 1)) return;
       ctx.fillText(p.label, x(i), padT + plotH + 6);
+    });
+
+    // 選択中の点の吹き出し
+    const sel = canvas._selIdx;
+    if (sel != null && points[sel] && points[sel].value != null) {
+      const p = points[sel];
+      const px = x(sel), py = y(p.value);
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.lineWidth = 1;
+      ctx.moveTo(px, padT); ctx.lineTo(px, padT + plotH);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(px, py, 5, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      const line1 = p.tip || p.label;
+      const line2 = masked ? '¥••••' : formatYen(p.value);
+      ctx.font = '600 12px -apple-system, sans-serif';
+      const w1 = ctx.measureText(line1).width;
+      ctx.font = '700 14px -apple-system, sans-serif';
+      const w2 = ctx.measureText(line2).width;
+      const bw = Math.max(w1, w2) + 20, bh = 42;
+      let bx = px - bw / 2;
+      bx = Math.max(padL - 40, Math.min(width - bw - 2, bx));
+      let by = py - bh - 10;
+      if (by < 2) by = py + 10;
+      ctx.fillStyle = 'rgba(20,28,46,0.96)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 8); else ctx.rect(bx, by, bw, bh);
+      ctx.fill(); ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = '600 12px -apple-system, sans-serif';
+      ctx.fillText(line1, bx + bw / 2, by + 6);
+      ctx.fillStyle = '#fff';
+      ctx.font = '700 14px -apple-system, sans-serif';
+      ctx.fillText(line2, bx + bw / 2, by + 22);
+    }
+  }
+
+  // グラフをタップしたら、いちばん近い点を選んで吹き出しを出す（同じ点をもう一度タップで消す）
+  function enableLineChartTap(canvas) {
+    canvas.addEventListener('click', (e) => {
+      const pts = canvas._hitPoints || [];
+      if (!pts.length || !canvas._redraw) return;
+      const r = canvas.getBoundingClientRect();
+      const tx = e.clientX - r.left;
+      let best = pts[0];
+      pts.forEach((p) => { if (Math.abs(p.x - tx) < Math.abs(best.x - tx)) best = p; });
+      canvas._selIdx = canvas._selIdx === best.i ? null : best.i;
+      canvas._redraw();
     });
   }
 
@@ -293,5 +353,5 @@ const Charts = (() => {
     ctx.fillText('合計', cx, cy + 12);
   }
 
-  return { drawLineChart, drawMultiLineChart, drawBreakdownBars, drawPieChart, formatYen, formatYenShort, hexToRgba };
+  return { drawLineChart, enableLineChartTap, drawMultiLineChart, drawBreakdownBars, drawPieChart, formatYen, formatYenShort, hexToRgba };
 })();
