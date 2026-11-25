@@ -869,10 +869,7 @@ function renderHistoryList() {
     return;
   }
   const nisaHtml = nisaLifetimeHtml(seriesId);
-  if (nisaHtml) {
-    list.insertAdjacentHTML('beforeend', nisaHtml);
-    list.querySelector('[data-open-nisa]').addEventListener('click', openNisaModal);
-  }
+  if (nisaHtml) list.insertAdjacentHTML('beforeend', nisaHtml);
   const years = historyYears(seriesId);
   if (!years.includes(historyYear)) historyYear = years[years.length - 1];
   const diffColor = (d) => (d > 0 ? 'var(--success)' : d < 0 ? 'var(--danger)' : 'var(--text-faint)');
@@ -1262,7 +1259,7 @@ function nisaLifetimeHtml(seriesId) {
   if (!show) return '';
   const s = nisaSummary(new Date().getFullYear());
   return `<div class="card nisa-life-card">
-    <div class="nisa-life-head"><h3 style="margin:0;">NISAの生涯投資枠</h3><button class="icon-btn small-link" type="button" data-open-nisa>編集</button></div>
+    <h3>NISAの生涯投資枠</h3>
     ${nisaBar('つみたて投資枠', s.lifeUsed, NISA_LIMITS.lifetime, s.lifeLeft, `つみたて ${yenShort(s.lifeUsed - s.groLifeUsed)} + 成長 ${yenShort(s.groLifeUsed)} / ${Charts.formatYenShort(NISA_LIMITS.lifetime)}`)}
     ${nisaBar('成長投資枠', s.groLifeUsed, NISA_LIMITS.growthLifetime, s.groLifeLeft)}
     <div class="nisa-note">つみたて投資枠は生涯枠1,800万円をすべて使えるので、成長投資枠で使った分も差し引いています。</div>
@@ -1346,7 +1343,6 @@ function openNisaModal() {
   });
 }
 document.getElementById('btn-open-nisa').addEventListener('click', openNisaModal);
-document.getElementById('btn-edit-nisa').addEventListener('click', openNisaModal);
 
 // ---------- カテゴリ管理 ----------
 function renderCategoriesSettings() {
