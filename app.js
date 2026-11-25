@@ -441,8 +441,6 @@ function renderHome() {
     prEl.classList.add('hidden');
   }
 
-  renderHomeNisa();
-
   // リマインダーバナー
   const banner = document.getElementById('home-banner-slot');
   const day = new Date().getDate();
@@ -707,10 +705,12 @@ async function moveHistorySeries(id, dir) {
 function renderHistorySeriesPicker() {
   const picker = document.getElementById('history-series-picker');
   const seriesList = historySeriesList();
+  // 最後に「NISA残り枠」タブ(NISAの利用額があるときだけ)
+  if (hasNisaUsage()) seriesList.push({ id: NISA_TAB_ID, label: 'NISA残り枠' });
   if (!seriesList.some((s) => s.id === historySelectedSeries)) historySelectedSeries = 'total';
   picker.innerHTML = seriesList.map((s) => `<button type="button" data-series="${s.id}" class="${s.id === historySelectedSeries ? 'selected' : ''}">${escapeHtml(s.label)}</button>`).join('');
   picker.querySelectorAll('button').forEach((b) => {
-    b.addEventListener('click', () => { historySelectedSeries = b.dataset.series; renderHistoryChart(); renderHistorySeriesPicker(); renderHistoryList(); });
+    b.addEventListener('click', () => { historySelectedSeries = b.dataset.series; renderHistory(); });
   });
 }
 // 履歴グラフ: 年別=1〜12月の1年分(左右スワイプか ‹ › で年を切替) / 3年=最新の記録月から3年分 / 全期間=記録した全期間。
@@ -851,8 +851,14 @@ function seriesHasRecord(seriesId, ym) {
   const accIds = new Set(STATE.accounts.filter((a) => a.category === seriesId).map((a) => a.id));
   return STATE.records.some((r) => r.yearMonth === ym && accIds.has(r.accountId));
 }
+const NISA_TAB_ID = '__nisa';
 function renderHistory() {
   renderHistorySeriesPicker();
+  const isNisa = historySelectedSeries === NISA_TAB_ID;
+  document.querySelector('#view-history .chart-card').classList.toggle('hidden', isNisa);
+  document.querySelector('#view-history .history-list-wrap').classList.toggle('hidden', isNisa);
+  document.getElementById('history-nisa').classList.toggle('hidden', !isNisa);
+  if (isNisa) { renderHistoryNisa(); return; }
   renderHistoryChart();
   renderHistoryList();
 }
@@ -868,8 +874,6 @@ function renderHistoryList() {
     list.innerHTML = '<div class="empty-state">まだ記録がありません。「記録」タブから最初の月を記録しましょう。</div>';
     return;
   }
-  const nisaHtml = nisaLifetimeHtml(seriesId);
-  if (nisaHtml) list.insertAdjacentHTML('beforeend', nisaHtml);
   const years = historyYears(seriesId);
   if (!years.includes(historyYear)) historyYear = years[years.length - 1];
   const diffColor = (d) => (d > 0 ? 'var(--success)' : d < 0 ? 'var(--danger)' : 'var(--text-faint)');
@@ -1232,42 +1236,25 @@ function nisaBar(label, used, limit, left, foot) {
     <div class="nisa-row-foot">${foot || `${yenShort(used)} / ${Charts.formatYenShort(limit)} 使用`}</div>
   </div>`;
 }
-// ホームは画面固定なので、今年の残り枠だけをコンパクトに出す(生涯は履歴タブ)
-function nisaMini(label, used, limit, left) {
-  const pct = Math.min(100, (used / limit) * 100);
-  return `<div class="nisa-mini">
-    <div class="nisa-mini-label">${label}</div>
-    <div class="nisa-mini-left">残り <b>${yenShort(left)}</b></div>
-    <div class="nisa-bar"><div style="width:${pct}%"></div></div>
-  </div>`;
-}
-function renderHomeNisa() {
-  const card = document.getElementById('home-nisa');
-  if (!hasNisaUsage()) { card.classList.add('hidden'); return; }
+// 履歴タブの「NISA残り枠」: 今年の残り枠と生涯の残り枠
+function renderHistoryNisa() {
+  const el = document.getElementById('history-nisa');
   const y = new Date().getFullYear();
   const s = nisaSummary(y);
-  document.getElementById('home-nisa-title').textContent = `NISAの残り枠（${y}年）`;
-  document.getElementById('home-nisa-body').innerHTML = `<div class="nisa-mini-row">
-    ${nisaMini('つみたて', s.tsuYearUsed, NISA_LIMITS.tsumitateYear, s.tsuYearLeft)}
-    ${nisaMini('成長', s.groYearUsed, NISA_LIMITS.growthYear, s.groYearLeft)}
-  </div>`;
-  card.classList.remove('hidden');
-}
-// 履歴タブ: 総額とNISAのカテゴリを見ているときに、生涯の残り枠を月リストの先頭に出す
-function nisaLifetimeHtml(seriesId) {
-  if (!hasNisaUsage()) return '';
   const auto = nisaAutoSettings();
-  const autoAcc = auto.enabled ? STATE.accounts.find((a) => a.id === auto.accountId) : null;
-  const cat = categories().find((c) => c.id === seriesId);
-  const show = seriesId === 'total' || (autoAcc && autoAcc.category === seriesId) || (cat && /NISA|ニーサ/i.test(cat.label));
-  if (!show) return '';
-  const s = nisaSummary(new Date().getFullYear());
-  return `<div class="card nisa-life-card">
-    <h3>NISAの生涯投資枠</h3>
-    ${nisaBar('つみたて投資枠', s.lifeUsed, NISA_LIMITS.lifetime, s.lifeLeft, `つみたて ${yenShort(s.lifeUsed - s.groLifeUsed)} + 成長 ${yenShort(s.groLifeUsed)} / ${Charts.formatYenShort(NISA_LIMITS.lifetime)}`)}
-    ${nisaBar('成長投資枠', s.groLifeUsed, NISA_LIMITS.growthLifetime, s.groLifeLeft)}
-    <div class="nisa-note">つみたて投資枠は生涯枠1,800万円をすべて使えるので、成長投資枠で使った分も差し引いています。</div>
-  </div>`;
+  el.innerHTML = `
+    <div class="card">
+      <h3>${y}年の残り枠${isNisaAutoYear(y, auto) ? '<span class="nisa-auto-tag">元本から自動</span>' : ''}</h3>
+      ${nisaBar('つみたて投資枠', s.tsuYearUsed, NISA_LIMITS.tsumitateYear, s.tsuYearLeft)}
+      ${nisaBar('成長投資枠', s.groYearUsed, NISA_LIMITS.growthYear, s.groYearLeft)}
+    </div>
+    <div class="card">
+      <h3>生涯投資枠</h3>
+      ${nisaBar('つみたて投資枠', s.lifeUsed, NISA_LIMITS.lifetime, s.lifeLeft, `つみたて ${yenShort(s.lifeUsed - s.groLifeUsed)} + 成長 ${yenShort(s.groLifeUsed)} / ${Charts.formatYenShort(NISA_LIMITS.lifetime)}`)}
+      ${nisaBar('成長投資枠', s.groLifeUsed, NISA_LIMITS.growthLifetime, s.groLifeLeft)}
+      <div class="nisa-note">つみたて投資枠は生涯枠1,800万円をすべて使えるので、成長投資枠で使った分も差し引いています。</div>
+    </div>
+    <div class="nisa-note" style="text-align:center;">利用額の入力・自動計算の設定は 設定 →「NISAの利用額」から</div>`;
 }
 function openNisaModal() {
   const manual = STATE.settings.nisaUsage || {};
@@ -1342,8 +1329,7 @@ function openNisaModal() {
     await persist();
     closeModal();
     showToast('NISAの利用額を保存しました');
-    renderHomeNisa();
-    if (!document.getElementById('view-history').classList.contains('hidden')) renderHistoryList();
+    if (!document.getElementById('view-history').classList.contains('hidden')) renderHistory();
   });
 }
 document.getElementById('btn-open-nisa').addEventListener('click', openNisaModal);
@@ -1575,7 +1561,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.12.1';
+const APP_VERSION = '1.13.0';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
