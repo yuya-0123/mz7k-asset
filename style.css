@@ -271,3 +271,12 @@ canvas.chart.tall { height: 220px; }
 .record-show-hidden { display: block; margin: 4px auto 10px; background: none; border: none; color: var(--accent); font: inherit; font-size: 13px; padding: 6px 10px; }
 /* 目隠しモード: 記録タブの入力欄は、タップして入力している間だけ数字が見える */
 body.amounts-masked #record-groups input:not(:focus) { -webkit-text-security: disc; text-security: disc; }
+/* 投資元本 */
+#record-groups .principal-row { padding-top: 0; }
+#record-groups .principal-row .label { font-size: 12px; color: var(--text-dim); }
+#record-groups .principal-row input { font-size: 13px; padding: 5px 10px; }
+.principal-sub { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; }
+.principal-sub .up { color: var(--success); }
+.principal-sub .down { color: var(--danger); }
+.list-row .meta.principal-meta { display: flex; flex-wrap: wrap; gap: 0 10px; }
+.list-row .meta.principal-meta > span { white-space: nowrap; }

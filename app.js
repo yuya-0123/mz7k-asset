@@ -309,6 +309,25 @@ function categoryTotalForMonth(catId, ym) {
   const accIds = new Set(STATE.accounts.filter((a) => a.category === catId).map((a) => a.id));
   return STATE.records.filter((r) => r.yearMonth === ym && accIds.has(r.accountId)).reduce((s, r) => s + r.balance, 0);
 }
+// 投資元本: 「元本も記録する」をオンにした口座の、その月の元本の合計。
+// あわせて、元本を記録した口座の評価額の合計も返す(含み損益の計算用)。元本の記録がなければ null
+function principalForMonth(seriesId, ym) {
+  const accs = STATE.accounts.filter((a) => a.trackPrincipal && (seriesId === 'total' || a.category === seriesId));
+  let principal = 0, value = 0, found = false;
+  accs.forEach((a) => {
+    const r = STATE.records.find((rr) => rr.accountId === a.id && rr.yearMonth === ym);
+    if (r && typeof r.principal === 'number') { principal += r.principal; value += r.balance; found = true; }
+  });
+  return found ? { principal, value, gain: value - principal } : null;
+}
+function seriesTracksPrincipal(seriesId) {
+  return STATE.accounts.some((a) => a.trackPrincipal && (seriesId === 'total' || a.category === seriesId));
+}
+function principalTipText(pr) {
+  if (!pr) return '';
+  const pct = pr.principal ? ` (${pr.gain >= 0 ? '+' : ''}${((pr.gain / pr.principal) * 100).toFixed(1)}%)` : '';
+  return `元本 ${yen(pr.principal)}　損益 ${yenSigned(pr.gain)}${pct}`;
+}
 function lastRecordedAtForMonth(ym) {
   const stamps = STATE.records.filter((r) => r.yearMonth === ym && r.recordedAt).map((r) => r.recordedAt);
   if (stamps.length === 0) return null;
@@ -325,7 +344,7 @@ const amountsMasked = () => !!(STATE && STATE.settings && STATE.settings.hideAmo
 const MASK = '¥••••';
 const yen = (v) => (amountsMasked() ? MASK : Charts.formatYen(v));
 const yenShort = (v) => (amountsMasked() ? MASK : Charts.formatYenShort(v));
-const yenSigned = (d, short = false) => (amountsMasked() ? `${d > 0 ? '+' : d < 0 ? '-' : ''}${MASK}` : `${d > 0 ? '+' : ''}${short ? Charts.formatYenShort(d) : Charts.formatYen(d)}`);
+const yenSigned = (d, short = false) => `${d > 0 ? '+' : d < 0 ? '-' : ''}${amountsMasked() ? MASK : short ? Charts.formatYenShort(Math.abs(d)) : Charts.formatYen(Math.abs(d))}`;
 function applyAmountMaskClass() { document.body.classList.toggle('amounts-masked', amountsMasked()); }
 
 // ---------- ホーム画面 ----------
@@ -400,6 +419,18 @@ function renderHome() {
   } else {
     deltaEl.textContent = 'まだ記録がありません';
     deltaEl.className = 'total-sub';
+  }
+
+  // 投資元本と含み損益（元本を記録した最新の月）
+  const prEl = document.getElementById('home-principal');
+  const prYm = months.slice().reverse().find((ym) => principalForMonth('total', ym));
+  if (prYm) {
+    const pr = principalForMonth('total', prYm);
+    const pct = pr.principal ? `${pr.gain >= 0 ? '+' : ''}${((pr.gain / pr.principal) * 100).toFixed(1)}%` : '';
+    prEl.innerHTML = `投資元本 ${yen(pr.principal)}　含み損益 <span class="${pr.gain > 0 ? 'up' : pr.gain < 0 ? 'down' : ''}">${yenSigned(pr.gain)}（${pct}）</span>`;
+    prEl.classList.remove('hidden');
+  } else {
+    prEl.classList.add('hidden');
   }
 
   // リマインダーバナー
@@ -571,6 +602,16 @@ function renderRecordView() {
         <input type="number" inputmode="decimal" data-account-id="${acc.id}" placeholder="0" value="${prefill}">
       `;
       card.appendChild(row);
+      if (acc.trackPrincipal) {
+        const pv = existing && typeof existing.principal === 'number' ? existing.principal : '';
+        const prow = document.createElement('div');
+        prow.className = 'amount-row principal-row';
+        prow.innerHTML = `
+          <div class="label"><span class="name">└ 元本</span></div>
+          <input type="number" inputmode="decimal" data-principal-id="${acc.id}" placeholder="元本" value="${pv}">
+        `;
+        card.appendChild(prow);
+      }
     });
     groupsEl.appendChild(card);
   });
@@ -596,8 +637,12 @@ document.getElementById('btn-save-record').addEventListener('click', async () =>
       if (idx >= 0) STATE.records.splice(idx, 1);
       return;
     }
-    if (idx >= 0) { STATE.records[idx].balance = val; STATE.records[idx].recordedAt = now; }
-    else STATE.records.push({ yearMonth: recordViewYm, accountId, balance: val, recordedAt: now });
+    const pInput = document.querySelector(`#record-groups input[data-principal-id="${accountId}"]`);
+    const principal = pInput && pInput.value !== '' ? Number(pInput.value) : null;
+    let rec;
+    if (idx >= 0) { rec = STATE.records[idx]; rec.balance = val; rec.recordedAt = now; }
+    else { rec = { yearMonth: recordViewYm, accountId, balance: val, recordedAt: now }; STATE.records.push(rec); }
+    if (pInput) { if (principal === null) delete rec.principal; else rec.principal = principal; }
     count++;
   });
   await persist();
@@ -695,6 +740,13 @@ document.querySelectorAll('#history-mode-picker button').forEach((b) => {
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) shiftHistoryYear(dx < 0 ? 1 : -1);
   });
 })();
+function principalPoint(seriesId, ym, has) {
+  if (!has) return {};
+  const pr = principalForMonth(seriesId, ym);
+  // 総額のグラフには銀行なども含まれるので、元本の点線は出さず吹き出しの文字だけ
+  if (!pr) return {};
+  return seriesId === 'total' ? { tipExtra: principalTipText(pr) } : { sub: pr.principal, tipExtra: principalTipText(pr) };
+}
 function renderHistoryChart() {
   const seriesList = historySeriesList();
   const series = seriesList.find((s) => s.id === historySelectedSeries) || seriesList[0];
@@ -727,7 +779,7 @@ function renderHistoryChart() {
     const points = [];
     for (let i = 36; i >= 0; i--) {
       const ym = ymAdd(lastYm, -i);
-      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null, showLabel: i % 6 === 0, tip: ymLabelFull(ym) });
+      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null, showLabel: i % 6 === 0, tip: ymLabelFull(ym) , ...principalPoint(series.id, ym, recorded.has(ym)) });
     }
     Charts.drawLineChart(canvas, points, series.color, amountsMasked());
     // 3年前(またはそれ以前)の最後の記録と比較。なければ範囲内の最初の記録と比較
@@ -746,7 +798,7 @@ function renderHistoryChart() {
     const recorded = new Set(months);
     const points = [];
     for (let ym = months[0]; ym <= months[months.length - 1]; ym = ymAdd(ym, 1)) {
-      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null, tip: ymLabelFull(ym) });
+      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null, tip: ymLabelFull(ym) , ...principalPoint(series.id, ym, recorded.has(ym)) });
     }
     Charts.drawLineChart(canvas, points, series.color, amountsMasked());
     const first = months[0], last = months[months.length - 1];
@@ -769,7 +821,7 @@ function renderHistoryChart() {
   const points = [];
   for (let m = 1; m <= 12; m++) {
     const ym = `${historyYear}-${String(m).padStart(2, '0')}`;
-    points.push({ label: String(m), value: recorded.has(ym) ? valueFor(ym) : null, showLabel: true, tip: ymLabelFull(ym) });
+    points.push({ label: String(m), value: recorded.has(ym) ? valueFor(ym) : null, showLabel: true, tip: ymLabelFull(ym) , ...principalPoint(series.id, ym, recorded.has(ym)) });
   }
   Charts.drawLineChart(canvas, points, series.color, amountsMasked(), 'この年の記録はありません');
 
@@ -826,8 +878,15 @@ function renderHistoryList() {
     const breakdownHtml = (seriesId === 'total' || items.length >= 2)
       ? `<div class="meta breakdown">${items.map((b) => `<span>${b.color ? `<span style="color:${b.color}">●</span>` : ''}${escapeHtml(b.label)} ${yenShort(b.value)}</span>`).join('')}</div>`
       : '';
+    const pr = principalForMonth(seriesId, ym);
+    let principalHtml = '';
+    if (pr) {
+      const prevPr = idx > 0 ? principalForMonth(seriesId, months[idx - 1]) : null;
+      const dep = prevPr ? pr.principal - prevPr.principal : null;
+      principalHtml = `<div class="meta principal-meta"><span>元本 ${yenShort(pr.principal)}${dep !== null && dep !== 0 ? `（入金 ${yenSigned(dep, true)}）` : ''}</span><span>損益 <span style="color:${diffColor(pr.gain)}">${yenSigned(pr.gain, true)}</span></span></div>`;
+    }
     row.innerHTML = `
-      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${breakdownHtml}${recordedHtml}</div></div>
+      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${breakdownHtml}${principalHtml}${recordedHtml}</div></div>
       <div class="value-col"><div class="value">${yen(total)}</div>${deltaHtml}</div>
     `;
     row.addEventListener('click', () => { recordViewYm = ym; switchView('record'); });
@@ -860,6 +919,7 @@ function renderAccounts() {
           <div>
             <div class="name">${escapeHtml(acc.name)}</div>
             ${acc.memo ? `<div class="meta">${escapeHtml(acc.memo)}</div>` : ''}
+            ${acc.trackPrincipal ? '<div class="meta">元本も記録</div>' : ''}
             ${acc.hideInRecord ? '<div class="meta">記録画面に表示しない</div>' : ''}
           </div>
         </div>
@@ -895,6 +955,10 @@ function openAccountModal(existing) {
       <input type="text" id="acc-memo" value="${existing ? escapeHtml(existing.memo || '') : ''}" placeholder="メモ">
     </div>
     <div class="toggle-row" style="padding-top:0;">
+      <div class="txt"><b>元本も記録する（投資口座）</b><span>オンにすると、記録タブで評価額と一緒に投資元本(入れた金額の合計)も入力できます</span></div>
+      <div class="switch ${existing && existing.trackPrincipal ? 'on' : ''}" id="acc-principal-switch"></div>
+    </div>
+    <div class="toggle-row" style="padding-top:0;">
       <div class="txt"><b>記録画面に表示しない</b><span>過去データ用の口座など。記録がある月や「非表示の口座も表示」を押したときだけ出ます</span></div>
       <div class="switch ${existing && existing.hideInRecord ? 'on' : ''}" id="acc-hide-switch"></div>
     </div>
@@ -912,16 +976,19 @@ function openAccountModal(existing) {
   });
   const hideSwitch = document.getElementById('acc-hide-switch');
   hideSwitch.addEventListener('click', () => hideSwitch.classList.toggle('on'));
+  const principalSwitch = document.getElementById('acc-principal-switch');
+  principalSwitch.addEventListener('click', () => principalSwitch.classList.toggle('on'));
   document.getElementById('acc-cancel').addEventListener('click', closeModal);
   document.getElementById('acc-save').addEventListener('click', async () => {
     const hideInRecord = hideSwitch.classList.contains('on');
+    const trackPrincipal = principalSwitch.classList.contains('on');
     const name = document.getElementById('acc-name').value.trim();
     const memo = document.getElementById('acc-memo').value.trim();
     if (!name) { showToast('口座名を入力してください'); return; }
     if (isEdit) {
-      existing.name = name; existing.memo = memo; existing.category = selectedCat; existing.hideInRecord = hideInRecord;
+      existing.name = name; existing.memo = memo; existing.category = selectedCat; existing.hideInRecord = hideInRecord; existing.trackPrincipal = trackPrincipal;
     } else {
-      STATE.accounts.push({ id: uuid(), name, memo, category: selectedCat, hideInRecord });
+      STATE.accounts.push({ id: uuid(), name, memo, category: selectedCat, hideInRecord, trackPrincipal });
     }
     await persist();
     closeModal();
@@ -1166,7 +1233,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.7.9';
+const APP_VERSION = '1.8.0';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });

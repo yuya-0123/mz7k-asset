@@ -94,7 +94,8 @@ const Charts = (() => {
     const plotW = width - padL - padR;
     const plotH = height - padT - padB;
 
-    const values = idx.map((i) => points[i].value);
+    const subIdx = idx.filter((i) => typeof points[i].sub === 'number');
+    const values = idx.map((i) => points[i].value).concat(subIdx.map((i) => points[i].sub));
     const axis = computeAxis(values);
     const niceMin = axis.niceMin;
     const niceRange = (axis.niceMax - axis.niceMin) || 1;
@@ -131,6 +132,19 @@ const Charts = (() => {
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.stroke();
+
+    // 投資元本(点線)
+    if (subIdx.length >= 1) {
+      ctx.save();
+      ctx.beginPath();
+      subIdx.forEach((i, k) => { const px = x(i), py = y(points[i].sub); if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
+      if (subIdx.length === 1) { const px = x(subIdx[0]), py = y(points[subIdx[0]].sub); ctx.moveTo(px - 4, py); ctx.lineTo(px + 4, py); }
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // 点(点が多いとき=長期間表示は最新の点だけ描く)
     const dense = points.length > 14;
@@ -182,7 +196,10 @@ const Charts = (() => {
       const w1 = ctx.measureText(line1).width;
       ctx.font = '700 14px -apple-system, sans-serif';
       const w2 = ctx.measureText(line2).width;
-      const bw = Math.max(w1, w2) + 20, bh = 42;
+      const line3 = p.tipExtra || '';
+      ctx.font = '500 11px -apple-system, sans-serif';
+      const w3 = line3 ? ctx.measureText(line3).width : 0;
+      const bw = Math.max(w1, w2, w3) + 20, bh = line3 ? 58 : 42;
       let bx = px - bw / 2;
       bx = Math.max(padL - 40, Math.min(width - bw - 2, bx));
       let by = py - bh - 10;
@@ -200,6 +217,11 @@ const Charts = (() => {
       ctx.fillStyle = '#fff';
       ctx.font = '700 14px -apple-system, sans-serif';
       ctx.fillText(line2, bx + bw / 2, by + 22);
+      if (line3) {
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '500 11px -apple-system, sans-serif';
+        ctx.fillText(line3, bx + bw / 2, by + 40);
+      }
     }
   }
 
