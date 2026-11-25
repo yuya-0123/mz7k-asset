@@ -251,3 +251,6 @@ canvas.chart.tall { height: 220px; }
 .pie-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .pie-month-nav { font-size: 14px; }
 .pie-month-nav button { font-size: 20px; }
+.pie-month-selects { display: inline-flex; align-items: center; gap: 2px; }
+.pie-month-selects select { -webkit-appearance: none; appearance: none; background: var(--bg); border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 8px; color: var(--text); font: inherit; font-size: 14px; font-weight: 700; padding: 4px 8px; text-align: center; text-align-last: center; cursor: pointer; }
+.pie-month-selects select:disabled { opacity: 0.5; }
