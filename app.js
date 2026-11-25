@@ -1181,12 +1181,16 @@ function nisaAutoForYear(year, auto) {
   const recs = STATE.records
     .filter((r) => r.accountId === auto.accountId && typeof r.principal === 'number')
     .sort((a, b) => (a.yearMonth < b.yearMonth ? -1 : 1));
-  let tsumitate = 0, growth = 0, prev = null;
+  // 元本の記録が飛んでいる月(記録なし)があれば、その間の月数ぶんのつみたてがあったとみなす
+  const monthsBetween = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
+  let tsumitate = 0, growth = 0, prev = null, prevYm = null;
   recs.forEach((r) => {
     const delta = r.principal - (prev === null ? 0 : prev);
+    const span = prevYm ? Math.max(1, monthsBetween(prevYm, r.yearMonth)) : 1;
     prev = r.principal;
+    prevYm = r.yearMonth;
     if (Number(r.yearMonth.slice(0, 4)) !== year || delta <= 0) return;
-    const t = Math.min(auto.monthly, delta);
+    const t = Math.min(auto.monthly * span, delta);
     tsumitate += t;
     growth += delta - t;
   });
@@ -1571,7 +1575,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.12.1';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
