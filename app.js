@@ -718,7 +718,16 @@ async function moveHistorySeries(id, dir) {
   if (i < 0 || j < 0 || j >= order.length) return;
   [order[i], order[j]] = [order[j], order[i]];
   STATE.settings.historySeriesOrder = order;
+  syncCategoryOrder(order);
   await persist();
+}
+// 並び順の設定をカテゴリそのものの順番にも反映(ホームの資産配分・記録・履歴の内訳もこの順になる)
+function syncCategoryOrder(order) {
+  const rank = new Map(order.filter((id) => id !== 'total').map((id, i) => [id, i]));
+  const cats = STATE.categories.slice();
+  const used = cats.filter((c) => rank.has(c.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id));
+  let k = 0;
+  STATE.categories = cats.map((c) => (rank.has(c.id) ? used[k++] : c));
 }
 function renderHistorySeriesPicker() {
   const picker = document.getElementById('history-series-picker');
@@ -1587,7 +1596,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.14.1';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
