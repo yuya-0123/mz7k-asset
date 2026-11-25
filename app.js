@@ -337,7 +337,7 @@ document.getElementById('btn-toggle-amounts').addEventListener('click', async ()
 });
 // 推移グラフの表示期間。最後に記録した月から遡って 1年/3年/全期間 分を毎月描く。
 // 目盛りのラベルは 1年=2か月おき / 3年=半年おき / 全期間=長さに合わせて間引き(最後に記録した月を基準)。
-// 記録がない月は直前に記録した月の合計で埋める。最初の記録より前は描かない。
+// 記録がない月は点を置かず、前後の記録した点を直線で結ぶ。最初の記録より前は描かない。
 const HOME_RANGES = { '1y': { months: 12, labelStep: 2 }, '3y': { months: 36, labelStep: 6 } };
 let homeRange = '1y';
 document.querySelectorAll('#home-range-picker button').forEach((b) => {
@@ -361,18 +361,13 @@ function homeTrendPoints(range) {
     ? { months: ymDiff(firstYm, lastYm), labelStep: niceLabelStep(ymDiff(firstYm, lastYm)) }
     : (HOME_RANGES[range] || HOME_RANGES['1y']);
   const points = [];
-  let carried = null;
-  // 範囲より前の最後の記録を、範囲の先頭の穴埋め用に拾っておく
-  const startYm = ymAdd(lastYm, -cfg.months);
-  const before = months.filter((ym) => ym < startYm);
-  if (before.length) carried = totalForMonth(before[before.length - 1]);
   const recorded = new Set(months);
   for (let i = cfg.months; i >= 0; i--) {
     const ym = ymAdd(lastYm, -i);
     if (ym < firstYm) continue;
-    if (recorded.has(ym)) carried = totalForMonth(ym);
     const label = `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`;
-    points.push({ label, value: carried, showLabel: i % cfg.labelStep === 0, tip: ymLabelFull(ym), noDot: !recorded.has(ym) });
+    // 記録がない月は値なし(null)にして、前後の記録した点どうしを直線で結ぶ
+    points.push({ label, value: recorded.has(ym) ? totalForMonth(ym) : null, showLabel: i % cfg.labelStep === 0, tip: ymLabelFull(ym) });
   }
   return points;
 }
@@ -1171,7 +1166,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.7.8';
+const APP_VERSION = '1.7.9';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
