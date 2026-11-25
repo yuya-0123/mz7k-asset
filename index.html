@@ -104,9 +104,20 @@
       <div id="view-history" class="view hidden">
         <div class="category-picker" id="history-series-picker" style="margin-bottom:12px;"></div>
         <div class="card chart-card">
-          <div class="total-sub" id="history-series-delta" style="margin-bottom:8px;"></div>
+          <div class="history-chart-head">
+            <div class="history-year-nav" id="history-year-nav">
+              <button type="button" id="history-year-prev" aria-label="前の年">‹</button>
+              <span id="history-chart-title">-</span>
+              <button type="button" id="history-year-next" aria-label="次の年">›</button>
+            </div>
+            <div class="range-picker" id="history-mode-picker">
+              <button type="button" data-mode="year" class="selected">年別</button>
+              <button type="button" data-mode="all">全期間</button>
+            </div>
+          </div>
+          <div class="total-sub" id="history-series-delta" style="margin-bottom:6px;"></div>
           <canvas class="chart tall" id="history-trend-chart"></canvas>
-          <div id="history-legend" style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:12px;"></div>
+          <div id="history-legend" class="year-bars"></div>
         </div>
         <div class="history-list-wrap">
           <div id="history-list"></div>
