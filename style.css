@@ -25,14 +25,17 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
-  /* iOSのホーム画面アプリ(black-translucent)では height:100% だとステータスバー分だけ下が足りなくなるため 100vh を使う */
-  height: 100vh;
+  height: 100%;
   position: fixed;
   inset: 0;
   width: 100%;
   overflow: hidden;
 }
 body { display: flex; flex-direction: column; }
+/* iOSのホーム画面アプリでは画面の高さが実際より短く計算され、下に隙間が出ることがある(100vhにするとタブが切れた)。
+   隙間に見えるのは html の背景なので、タブバーと同じ色にして隙間をタブバーの延長に見せる。 */
+html { background: var(--bg-elevated); }
+body { background: var(--bg); }
 
 button, input, select { font-family: inherit; }
 button { -webkit-appearance: none; appearance: none; }
@@ -220,3 +223,6 @@ canvas.chart.tall { height: 220px; }
 .lock-version { position: absolute; top: calc(var(--safe-top) + 10px); right: 18px; font-size: 11.5px; color: var(--text-faint); letter-spacing: 0.04em; }
 .list-row .value-col { text-align: right; flex-shrink: 0; }
 .list-row .value-col .meta { margin-top: 2px; }
+/* iOSのホーム画面アプリで画面下に隙間ができる場合、隙間がホームインジケーターの分を兼ねるので
+   タブバー側の下余白(セーフエリア分)は付けずに詰める */
+html.has-bottom-gap .tabbar { padding-bottom: 6px; }
