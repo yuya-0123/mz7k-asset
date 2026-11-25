@@ -322,3 +322,13 @@ body.amounts-masked #record-groups input:not(:focus) { -webkit-text-security: di
 .nisa-auto-fields .field select, .nisa-input-row select { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text); font-size: 16px; }
 .nisa-auto-fields .nisa-input-row { margin-bottom: 10px; }
 .nisa-input-row input:disabled { opacity: 0.75; color: var(--accent); }
+
+/* ホームのNISA(今年だけ・コンパクト) */
+.nisa-card { padding-top: 12px; padding-bottom: 12px; flex: 0 0 auto; }
+.nisa-mini-row { display: flex; gap: 16px; }
+.nisa-mini { flex: 1; min-width: 0; }
+.nisa-mini-label { font-size: 12px; color: var(--text-dim); }
+.nisa-mini-left { font-size: 14px; margin: 2px 0 6px; white-space: nowrap; }
+.nisa-mini-left b { font-variant-numeric: tabular-nums; }
+.nisa-life-card { margin-bottom: 12px; }
+.nisa-life-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }

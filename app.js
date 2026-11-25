@@ -868,6 +868,11 @@ function renderHistoryList() {
     list.innerHTML = '<div class="empty-state">まだ記録がありません。「記録」タブから最初の月を記録しましょう。</div>';
     return;
   }
+  const nisaHtml = nisaLifetimeHtml(seriesId);
+  if (nisaHtml) {
+    list.insertAdjacentHTML('beforeend', nisaHtml);
+    list.querySelector('[data-open-nisa]').addEventListener('click', openNisaModal);
+  }
   const years = historyYears(seriesId);
   if (!years.includes(historyYear)) historyYear = years[years.length - 1];
   const diffColor = (d) => (d > 0 ? 'var(--success)' : d < 0 ? 'var(--danger)' : 'var(--text-faint)');
@@ -1226,21 +1231,41 @@ function nisaBar(label, used, limit, left) {
     <div class="nisa-row-foot">${yenShort(used)} / ${Charts.formatYenShort(limit)} 使用</div>
   </div>`;
 }
+// ホームは画面固定なので、今年の残り枠だけをコンパクトに出す(生涯は履歴タブ)
+function nisaMini(label, used, limit, left) {
+  const pct = Math.min(100, (used / limit) * 100);
+  return `<div class="nisa-mini">
+    <div class="nisa-mini-label">${label}</div>
+    <div class="nisa-mini-left">残り <b>${yenShort(left)}</b></div>
+    <div class="nisa-bar"><div style="width:${pct}%"></div></div>
+  </div>`;
+}
 function renderHomeNisa() {
   const card = document.getElementById('home-nisa');
   if (!hasNisaUsage()) { card.classList.add('hidden'); return; }
   const y = new Date().getFullYear();
   const s = nisaSummary(y);
+  document.getElementById('home-nisa-title').textContent = `NISAの残り枠（${y}年）`;
+  document.getElementById('home-nisa-body').innerHTML = `<div class="nisa-mini-row">
+    ${nisaMini('つみたて', s.tsuYearUsed, NISA_LIMITS.tsumitateYear, s.tsuYearLeft)}
+    ${nisaMini('成長', s.groYearUsed, NISA_LIMITS.growthYear, s.groYearLeft)}
+  </div>`;
+  card.classList.remove('hidden');
+}
+// 履歴タブ: 総額とNISAのカテゴリを見ているときに、生涯の残り枠を月リストの先頭に出す
+function nisaLifetimeHtml(seriesId) {
+  if (!hasNisaUsage()) return '';
   const auto = nisaAutoSettings();
-  document.getElementById('home-nisa-body').innerHTML = `
-    <div class="nisa-section">${y}年${isNisaAutoYear(y, auto) ? '<span class="nisa-auto-tag">元本から自動</span>' : ''}</div>
-    ${nisaBar('つみたて投資枠', s.tsuYearUsed, NISA_LIMITS.tsumitateYear, s.tsuYearLeft)}
-    ${nisaBar('成長投資枠', s.groYearUsed, NISA_LIMITS.growthYear, s.groYearLeft)}
-    <div class="nisa-section">生涯</div>
+  const autoAcc = auto.enabled ? STATE.accounts.find((a) => a.id === auto.accountId) : null;
+  const cat = categories().find((c) => c.id === seriesId);
+  const show = seriesId === 'total' || (autoAcc && autoAcc.category === seriesId) || (cat && /NISA|ニーサ/i.test(cat.label));
+  if (!show) return '';
+  const s = nisaSummary(new Date().getFullYear());
+  return `<div class="card nisa-life-card">
+    <div class="nisa-life-head"><h3 style="margin:0;">NISAの生涯投資枠</h3><button class="icon-btn small-link" type="button" data-open-nisa>編集</button></div>
     ${nisaBar('合計', s.lifeUsed, NISA_LIMITS.lifetime, s.lifeLeft)}
     ${nisaBar('うち成長投資枠', s.groLifeUsed, NISA_LIMITS.growthLifetime, s.groLifeLeft)}
-  `;
-  card.classList.remove('hidden');
+  </div>`;
 }
 function openNisaModal() {
   const manual = STATE.settings.nisaUsage || {};
@@ -1316,6 +1341,7 @@ function openNisaModal() {
     closeModal();
     showToast('NISAの利用額を保存しました');
     renderHomeNisa();
+    if (!document.getElementById('view-history').classList.contains('hidden')) renderHistoryList();
   });
 }
 document.getElementById('btn-open-nisa').addEventListener('click', openNisaModal);
