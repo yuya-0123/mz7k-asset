@@ -321,6 +321,24 @@ function principalForMonth(seriesId, ym) {
   return found ? { principal, value, gain: value - principal } : null;
 }
 // 元本を固定にした口座(旧NISAなど)用: 指定月より前で最後に記録した元本
+function lastPrincipalRecordBefore(accountId, ym) {
+  let best = null;
+  STATE.records.forEach((r) => {
+    if (r.accountId === accountId && r.yearMonth < ym && typeof r.principal === 'number' && (!best || r.yearMonth > best.yearMonth)) best = r;
+  });
+  return best;
+}
+// 新しい月の元本の初期値: 固定なら前回の値、毎月の積立額があれば 前回 + 積立額 × 経過月数
+function suggestedPrincipal(acc, ym) {
+  const last = lastPrincipalRecordBefore(acc.id, ym);
+  if (!last) return null;
+  if (acc.principalFixed) return last.principal;
+  if (acc.principalMonthly > 0) {
+    const months = (Number(ym.slice(0, 4)) - Number(last.yearMonth.slice(0, 4))) * 12 + Number(ym.slice(5, 7)) - Number(last.yearMonth.slice(5, 7));
+    return last.principal + acc.principalMonthly * months;
+  }
+  return null;
+}
 function lastPrincipalBefore(accountId, ym) {
   let best = null;
   STATE.records.forEach((r) => {
@@ -612,11 +630,11 @@ function renderRecordView() {
       card.appendChild(row);
       if (acc.trackPrincipal) {
         let pv = existing && typeof existing.principal === 'number' ? existing.principal : '';
-        if (pv === '' && acc.principalFixed) { const last = lastPrincipalBefore(acc.id, recordViewYm); if (last !== null) pv = last; }
+        if (pv === '') { const sug = suggestedPrincipal(acc, recordViewYm); if (sug !== null) pv = sug; }
         const prow = document.createElement('div');
         prow.className = 'amount-row principal-row';
         prow.innerHTML = `
-          <div class="label"><span class="name">└ 元本${acc.principalFixed ? '<small>（固定）</small>' : ''}</span></div>
+          <div class="label"><span class="name">└ 元本${acc.principalFixed ? '<small>（固定）</small>' : acc.principalMonthly > 0 ? `<small>（毎月+${Charts.formatYenShort(acc.principalMonthly)}）</small>` : ''}</span></div>
           <input type="number" inputmode="decimal" data-principal-id="${acc.id}" placeholder="元本" value="${pv}">
         `;
         card.appendChild(prow);
@@ -936,7 +954,7 @@ function renderAccounts() {
           <div>
             <div class="name">${escapeHtml(acc.name)}</div>
             ${acc.memo ? `<div class="meta">${escapeHtml(acc.memo)}</div>` : ''}
-            ${acc.trackPrincipal ? `<div class="meta">元本も記録${acc.principalFixed ? '（固定）' : ''}</div>` : ''}
+            ${acc.trackPrincipal ? `<div class="meta">元本も記録${acc.principalFixed ? '（固定）' : acc.principalMonthly > 0 ? `（毎月+${Charts.formatYenShort(acc.principalMonthly)}）` : ''}</div>` : ''}
             ${acc.hideInRecord ? '<div class="meta">記録画面に表示しない</div>' : ''}
           </div>
         </div>
@@ -979,6 +997,10 @@ function openAccountModal(existing) {
       <div class="txt"><b>元本を固定（旧NISAなど）</b><span>もう入金しない口座向け。新しい月の元本に前回の値を自動で入れます(書き換えもOK)</span></div>
       <div class="switch ${existing && existing.principalFixed ? 'on' : ''}" id="acc-fixed-switch"></div>
     </div>
+    <div class="field sub-toggle" id="acc-monthly-row" style="${existing && existing.trackPrincipal && !existing.principalFixed ? '' : 'display:none;'}">
+      <label>元本を毎月自動で増やす（企業型DCなど・毎月の積立額）</label>
+      <input type="number" inputmode="numeric" id="acc-monthly" value="${existing && existing.principalMonthly > 0 ? existing.principalMonthly : ''}" placeholder="空欄ならオフ（例: 20000）">
+    </div>
     <div class="toggle-row" style="padding-top:0;">
       <div class="txt"><b>記録画面に表示しない</b><span>過去データ用の口座など。記録がある月や「非表示の口座も表示」を押したときだけ出ます</span></div>
       <div class="switch ${existing && existing.hideInRecord ? 'on' : ''}" id="acc-hide-switch"></div>
@@ -1001,23 +1023,27 @@ function openAccountModal(existing) {
   const principalSwitch = document.getElementById('acc-principal-switch');
   const fixedSwitch = document.getElementById('acc-fixed-switch');
   const fixedRow = document.getElementById('acc-fixed-row');
-  principalSwitch.addEventListener('click', () => {
-    principalSwitch.classList.toggle('on');
-    fixedRow.style.display = principalSwitch.classList.contains('on') ? '' : 'none';
-  });
-  fixedSwitch.addEventListener('click', () => fixedSwitch.classList.toggle('on'));
+  const monthlyRow = document.getElementById('acc-monthly-row');
+  const syncPrincipalRows = () => {
+    const on = principalSwitch.classList.contains('on');
+    fixedRow.style.display = on ? '' : 'none';
+    monthlyRow.style.display = on && !fixedSwitch.classList.contains('on') ? '' : 'none';
+  };
+  principalSwitch.addEventListener('click', () => { principalSwitch.classList.toggle('on'); syncPrincipalRows(); });
+  fixedSwitch.addEventListener('click', () => { fixedSwitch.classList.toggle('on'); syncPrincipalRows(); });
   document.getElementById('acc-cancel').addEventListener('click', closeModal);
   document.getElementById('acc-save').addEventListener('click', async () => {
     const hideInRecord = hideSwitch.classList.contains('on');
     const trackPrincipal = principalSwitch.classList.contains('on');
     const principalFixed = trackPrincipal && fixedSwitch.classList.contains('on');
+    const principalMonthly = trackPrincipal && !principalFixed ? Math.max(0, Math.round(Number(document.getElementById('acc-monthly').value) || 0)) : 0;
     const name = document.getElementById('acc-name').value.trim();
     const memo = document.getElementById('acc-memo').value.trim();
     if (!name) { showToast('口座名を入力してください'); return; }
     if (isEdit) {
-      existing.name = name; existing.memo = memo; existing.category = selectedCat; existing.hideInRecord = hideInRecord; existing.trackPrincipal = trackPrincipal; existing.principalFixed = principalFixed;
+      existing.name = name; existing.memo = memo; existing.category = selectedCat; existing.hideInRecord = hideInRecord; existing.trackPrincipal = trackPrincipal; existing.principalFixed = principalFixed; existing.principalMonthly = principalMonthly;
     } else {
-      STATE.accounts.push({ id: uuid(), name, memo, category: selectedCat, hideInRecord, trackPrincipal, principalFixed });
+      STATE.accounts.push({ id: uuid(), name, memo, category: selectedCat, hideInRecord, trackPrincipal, principalFixed, principalMonthly });
     }
     await persist();
     closeModal();
@@ -1561,7 +1587,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.13.1';
+const APP_VERSION = '1.14.0';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });

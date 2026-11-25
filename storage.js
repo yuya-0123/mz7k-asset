@@ -43,6 +43,7 @@ const Storage = (() => {
     if (!state.settings.nisaUsage || typeof state.settings.nisaUsage !== 'object') state.settings.nisaUsage = {};
     if (!state.settings.nisaAuto || typeof state.settings.nisaAuto !== 'object') state.settings.nisaAuto = { enabled: false, accountId: '', monthly: 100000, fromYear: new Date().getFullYear() };
     if (!state.accounts) state.accounts = [];
+    state.accounts.forEach((a) => { if (typeof a.principalMonthly !== 'number') a.principalMonthly = 0; });
     if (!state.records) state.records = [];
     return state;
   }
