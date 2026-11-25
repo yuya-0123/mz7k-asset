@@ -335,11 +335,11 @@ document.getElementById('btn-toggle-amounts').addEventListener('click', async ()
   await persist();
   renderHome();
 });
-// 推移グラフの表示期間。最後に記録した月から遡って 半年/1年/3年 分を毎月描く。
-// 目盛りのラベルは 半年=毎月 / 1年=2か月おき / 3年=半年おき(最後に記録した月を基準)。
+// 推移グラフの表示期間。最後に記録した月から遡って 1年/3年/全期間 分を毎月描く。
+// 目盛りのラベルは 1年=2か月おき / 3年=半年おき / 全期間=長さに合わせて間引き(最後に記録した月を基準)。
 // 記録がない月は直前に記録した月の合計で埋める。最初の記録より前は描かない。
-const HOME_RANGES = { '6m': { months: 6, labelStep: 1 }, '1y': { months: 12, labelStep: 2 }, '3y': { months: 36, labelStep: 6 } };
-let homeRange = '6m';
+const HOME_RANGES = { '1y': { months: 12, labelStep: 2 }, '3y': { months: 36, labelStep: 6 } };
+let homeRange = '1y';
 document.querySelectorAll('#home-range-picker button').forEach((b) => {
   b.addEventListener('click', () => {
     homeRange = b.dataset.range;
@@ -359,7 +359,7 @@ function homeTrendPoints(range) {
   const lastYm = months[months.length - 1];
   const cfg = range === 'all'
     ? { months: ymDiff(firstYm, lastYm), labelStep: niceLabelStep(ymDiff(firstYm, lastYm)) }
-    : (HOME_RANGES[range] || HOME_RANGES['6m']);
+    : (HOME_RANGES[range] || HOME_RANGES['1y']);
   const points = [];
   let carried = null;
   // 範囲より前の最後の記録を、範囲の先頭の穴埋め用に拾っておく
@@ -371,11 +371,13 @@ function homeTrendPoints(range) {
     const ym = ymAdd(lastYm, -i);
     if (ym < firstYm) continue;
     if (recorded.has(ym)) carried = totalForMonth(ym);
-    const label = range === '6m' ? ymLabelShort(ym) : `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`;
-    points.push({ label, value: carried, showLabel: i % cfg.labelStep === 0 });
+    const label = `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`;
+    points.push({ label, value: carried, showLabel: i % cfg.labelStep === 0, tip: recorded.has(ym) ? ymLabelFull(ym) : `${ymLabelFull(ym)}（記録なし・前の値）` });
   }
   return points;
 }
+Charts.enableLineChartTap(document.getElementById('home-trend-chart'));
+Charts.enableLineChartTap(document.getElementById('history-trend-chart'));
 function renderHomeTrendChart() {
   const hidden = !!STATE.settings.hideAmounts;
   Charts.drawLineChart(document.getElementById('home-trend-chart'), homeTrendPoints(homeRange), '#4f9dff', hidden);
@@ -730,7 +732,7 @@ function renderHistoryChart() {
     const points = [];
     for (let i = 36; i >= 0; i--) {
       const ym = ymAdd(lastYm, -i);
-      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null, showLabel: i % 6 === 0 });
+      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null, showLabel: i % 6 === 0, tip: ymLabelFull(ym) });
     }
     Charts.drawLineChart(canvas, points, series.color, amountsMasked());
     // 3年前(またはそれ以前)の最後の記録と比較。なければ範囲内の最初の記録と比較
@@ -749,7 +751,7 @@ function renderHistoryChart() {
     const recorded = new Set(months);
     const points = [];
     for (let ym = months[0]; ym <= months[months.length - 1]; ym = ymAdd(ym, 1)) {
-      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null });
+      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null, tip: ymLabelFull(ym) });
     }
     Charts.drawLineChart(canvas, points, series.color, amountsMasked());
     const first = months[0], last = months[months.length - 1];
@@ -772,7 +774,7 @@ function renderHistoryChart() {
   const points = [];
   for (let m = 1; m <= 12; m++) {
     const ym = `${historyYear}-${String(m).padStart(2, '0')}`;
-    points.push({ label: String(m), value: recorded.has(ym) ? valueFor(ym) : null, showLabel: true });
+    points.push({ label: String(m), value: recorded.has(ym) ? valueFor(ym) : null, showLabel: true, tip: ymLabelFull(ym) });
   }
   Charts.drawLineChart(canvas, points, series.color, amountsMasked(), 'この年の記録はありません');
 
@@ -1169,7 +1171,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.7.5';
+const APP_VERSION = '1.7.6';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
