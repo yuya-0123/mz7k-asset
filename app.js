@@ -286,10 +286,23 @@ function latestKnownBalance(accountId, uptoYmExclusiveOrInclusive) {
 }
 // カテゴリ内の口座ごとの内訳（その月に記録がある口座だけ、口座の登録順）
 function accountBreakdownForMonth(catId, ym) {
-  return STATE.accounts.filter((a) => a.category === catId).map((a) => {
+  const cat = categories().find((c) => c.id === catId);
+  const accs = STATE.accounts.filter((a) => a.category === catId);
+  return accs.map((a, i) => {
     const rec = STATE.records.find((r) => r.yearMonth === ym && r.accountId === a.id);
-    return rec ? { label: a.name, value: rec.balance } : null;
+    return rec ? { label: a.name, value: rec.balance, color: accountShade(cat ? cat.color : '#888888', i, accs.length) } : null;
   }).filter(Boolean);
+}
+// 口座の丸の色: カテゴリの色をベースに、口座ごとに明るさを変える（1つ目はカテゴリ色そのまま）
+function accountShade(hex, i, n) {
+  if (i === 0 || n <= 1) return hex;
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const num = parseInt(m[1], 16);
+  const t = Math.min(0.6, (i / (n - 1)) * 0.6); // 0〜60% 白に寄せる
+  const mix = (c) => Math.round(c + (255 - c) * t);
+  const r = mix(num >> 16), g = mix((num >> 8) & 255), b = mix(num & 255);
+  return `rgb(${r},${g},${b})`;
 }
 function categoryTotalForMonth(catId, ym) {
   const accIds = new Set(STATE.accounts.filter((a) => a.category === catId).map((a) => a.id));
@@ -1022,7 +1035,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.6.8';
+const APP_VERSION = '1.6.9';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
