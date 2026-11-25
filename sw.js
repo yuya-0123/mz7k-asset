@@ -1,3 +1,4 @@
+// キャッシュ名はアプリを更新するたびに上げる（古いファイルが残らないように）
 const CACHE_NAME = 'asset-tracker-v22';
 const ASSETS = [
   './',
