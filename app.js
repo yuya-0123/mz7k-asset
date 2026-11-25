@@ -587,21 +587,6 @@ function renderHistoryChart() {
       points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null });
     }
     Charts.drawLineChart(canvas, points, series.color);
-    // 年ごとの増減の横棒(前年最後の記録と比較。最初の年はその年最初の記録と比較)
-    const yrs = historyYears(series.id);
-    const rows = yrs.map((y) => {
-      const ym = months.filter((m) => m.slice(0, 4) === y);
-      const prev = months.filter((m) => m.slice(0, 4) < y);
-      const base = prev.length ? prev[prev.length - 1] : ym[0];
-      return { y, diff: valueFor(ym[ym.length - 1]) - valueFor(base) };
-    });
-    const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.diff)));
-    document.getElementById('history-legend').innerHTML = rows.slice().reverse().map((r) => `
-      <div class="year-bar">
-        <span class="y">${r.y}</span>
-        <span class="track"><span class="fill ${r.diff < 0 ? 'neg' : ''}" style="width:${Math.round((Math.abs(r.diff) / maxAbs) * 100)}%"></span></span>
-        <span class="v ${r.diff > 0 ? 'up' : r.diff < 0 ? 'down' : ''}">${r.diff > 0 ? '+' : ''}${Charts.formatYenShort(r.diff)}</span>
-      </div>`).join('');
     const first = months[0], last = months[months.length - 1];
     if (first === last) setDelta(`${ymLabelFull(last)}時点　${Charts.formatYen(valueFor(last))}`, null);
     else {

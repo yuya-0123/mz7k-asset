@@ -208,15 +208,6 @@ canvas.chart.tall { height: 220px; }
 .history-year-nav.all-mode button { visibility: hidden; }
 #history-trend-chart { touch-action: pan-y; }
 #history-series-delta { font-size: 16px; font-weight: 700; }
-.year-bars { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 84px; overflow-y: auto; }
-.year-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.year-bar .y { width: 34px; color: var(--text-dim); }
-.year-bar .track { flex: 1; height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
-.year-bar .fill { display: block; height: 100%; background: var(--success); border-radius: 4px; }
-.year-bar .fill.neg { background: var(--danger); }
-.year-bar .v { width: 64px; text-align: right; color: var(--text-dim); }
-.year-bar .v.up { color: var(--success); }
-.year-bar .v.down { color: var(--danger); }
 .version-row { display: flex; justify-content: space-between; font-size: 14px; }
 .version-row #version-current { font-weight: 700; }
 .version-status { font-size: 12.5px; color: var(--text-faint); margin-top: 6px; }
