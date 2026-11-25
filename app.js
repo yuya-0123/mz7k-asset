@@ -239,6 +239,7 @@ document.getElementById('btn-lock-now').addEventListener('click', lockApp);
 
 // ---------- メインアプリ ----------
 function enterMainApp() {
+  applyAmountMaskClass();
   showScreen('screen-main');
   switchView('home');
 }
@@ -318,9 +319,19 @@ function formatRecordedDate(iso) {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}に記録`;
 }
 
+// ---------- 目隠しモード ----------
+// ホームの目のボタンでオンにすると、全タブの金額を「••••」で隠す（記録タブの入力欄はタップ中だけ見える）
+const amountsMasked = () => !!(STATE && STATE.settings && STATE.settings.hideAmounts);
+const MASK = '¥••••';
+const yen = (v) => (amountsMasked() ? MASK : Charts.formatYen(v));
+const yenShort = (v) => (amountsMasked() ? MASK : Charts.formatYenShort(v));
+const yenSigned = (d, short = false) => (amountsMasked() ? `${d > 0 ? '+' : d < 0 ? '-' : ''}${MASK}` : `${d > 0 ? '+' : ''}${short ? Charts.formatYenShort(d) : Charts.formatYen(d)}`);
+function applyAmountMaskClass() { document.body.classList.toggle('amounts-masked', amountsMasked()); }
+
 // ---------- ホーム画面 ----------
 document.getElementById('btn-toggle-amounts').addEventListener('click', async () => {
   STATE.settings.hideAmounts = !STATE.settings.hideAmounts;
+  applyAmountMaskClass();
   await persist();
   renderHome();
 });
@@ -694,13 +705,13 @@ function renderHistoryChart() {
     deltaEl.textContent = text;
     deltaEl.className = 'total-sub ' + (diff == null ? '' : diff > 0 ? 'up' : diff < 0 ? 'down' : '');
   };
-  const signed = (d) => `${d > 0 ? '+' : ''}${Charts.formatYen(d)}`;
+  const signed = (d) => yenSigned(d);
   navEl.classList.toggle('all-mode', historyMode === 'all');
 
   if (months.length === 0) {
     titleEl.textContent = historyMode === 'all' ? '全期間' : '-';
     setDelta('', null);
-    Charts.drawLineChart(canvas, [], series.color);
+    Charts.drawLineChart(canvas, [], series.color, amountsMasked());
     return;
   }
 
@@ -711,9 +722,9 @@ function renderHistoryChart() {
     for (let ym = months[0]; ym <= months[months.length - 1]; ym = ymAdd(ym, 1)) {
       points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null });
     }
-    Charts.drawLineChart(canvas, points, series.color);
+    Charts.drawLineChart(canvas, points, series.color, amountsMasked());
     const first = months[0], last = months[months.length - 1];
-    if (first === last) setDelta(`${ymLabelFull(last)}時点　${Charts.formatYen(valueFor(last))}`, null);
+    if (first === last) setDelta(`${ymLabelFull(last)}時点　${yen(valueFor(last))}`, null);
     else {
       const diff = valueFor(last) - valueFor(first);
       setDelta(`${first.slice(2, 4)}年${Number(first.slice(5, 7))}月から　${signed(diff)}`, diff);
@@ -734,13 +745,13 @@ function renderHistoryChart() {
     const ym = `${historyYear}-${String(m).padStart(2, '0')}`;
     points.push({ label: String(m), value: recorded.has(ym) ? valueFor(ym) : null, showLabel: true });
   }
-  Charts.drawLineChart(canvas, points, series.color, false, 'この年の記録はありません');
+  Charts.drawLineChart(canvas, points, series.color, amountsMasked(), 'この年の記録はありません');
 
   const yMonths = months.filter((ym) => ym.slice(0, 4) === historyYear);
   const lastYm = yMonths[yMonths.length - 1];
   const prev = months.filter((ym) => ym.slice(0, 4) < historyYear);
   const baseYm = prev.length ? prev[prev.length - 1] : yMonths[0];
-  if (baseYm === lastYm) setDelta(`${ymLabelFull(lastYm)}時点　${Charts.formatYen(valueFor(lastYm))}`, null);
+  if (baseYm === lastYm) setDelta(`${ymLabelFull(lastYm)}時点　${yen(valueFor(lastYm))}`, null);
   else {
     const diff = valueFor(lastYm) - valueFor(baseYm);
     setDelta(`年間の増減（${baseYm.slice(2, 4)}年${Number(baseYm.slice(5, 7))}月比）　${signed(diff)}`, diff);
@@ -771,7 +782,7 @@ function renderHistoryList() {
   const years = historyYears(seriesId);
   if (!years.includes(historyYear)) historyYear = years[years.length - 1];
   const diffColor = (d) => (d > 0 ? 'var(--success)' : d < 0 ? 'var(--danger)' : 'var(--text-faint)');
-  const signed = (d) => `${d > 0 ? '+' : ''}${Charts.formatYenShort(d)}`;
+  const signed = (d) => yenSigned(d, true);
   const yMonths = historyMode === 'all' ? months : months.filter((ym) => ym.slice(0, 4) === historyYear);
   yMonths.slice().reverse().forEach((ym) => {
     const total = valueFor(ym);
@@ -784,11 +795,11 @@ function renderHistoryList() {
     const recordedHtml = recordedAt ? `<div class="meta">${formatRecordedDate(recordedAt)}</div>` : '';
     const items = seriesId === 'total' ? breakdownForMonth(ym) : accountBreakdownForMonth(seriesId, ym);
     const breakdownHtml = (seriesId === 'total' || items.length >= 2)
-      ? `<div class="meta breakdown">${items.map((b) => `<span>${b.color ? `<span style="color:${b.color}">●</span>` : ''}${escapeHtml(b.label)} ${Charts.formatYenShort(b.value)}</span>`).join('')}</div>`
+      ? `<div class="meta breakdown">${items.map((b) => `<span>${b.color ? `<span style="color:${b.color}">●</span>` : ''}${escapeHtml(b.label)} ${yenShort(b.value)}</span>`).join('')}</div>`
       : '';
     row.innerHTML = `
       <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${breakdownHtml}${recordedHtml}</div></div>
-      <div class="value-col"><div class="value">${Charts.formatYen(total)}</div>${deltaHtml}</div>
+      <div class="value-col"><div class="value">${yen(total)}</div>${deltaHtml}</div>
     `;
     row.addEventListener('click', () => { recordViewYm = ym; switchView('record'); });
     list.appendChild(row);
@@ -823,7 +834,7 @@ function renderAccounts() {
             ${acc.hideInRecord ? '<div class="meta">記録画面に表示しない</div>' : ''}
           </div>
         </div>
-        <div class="value small">${latest !== null ? Charts.formatYenShort(latest) : '未記録'}</div>
+        <div class="value small">${latest !== null ? yenShort(latest) : '未記録'}</div>
       `;
       row.addEventListener('click', () => openAccountModal(acc));
       list.appendChild(row);
@@ -1126,7 +1137,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.7.3';
+const APP_VERSION = '1.7.4';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
