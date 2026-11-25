@@ -296,3 +296,17 @@ body.amounts-masked #record-groups input:not(:focus) { -webkit-text-security: di
 .bulk-table th { color: var(--text-dim); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
 .bulk-table tr.changed td:last-child { color: var(--accent); font-weight: 600; }
 .bulk-warn { color: #f0a500; font-size: 12.5px; line-height: 1.6; margin-bottom: 10px; }
+
+/* NISAの残り枠 */
+.small-link { background: none; border: none; font-size: 13px; color: var(--accent); padding: 4px 6px; }
+.nisa-section { font-size: 12px; color: var(--text-dim); margin: 6px 0 6px; font-weight: 600; }
+.nisa-row { margin-bottom: 12px; }
+.nisa-row-head { display: flex; justify-content: space-between; font-size: 13.5px; margin-bottom: 5px; }
+.nisa-row-head b { font-variant-numeric: tabular-nums; }
+.nisa-bar { height: 7px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.nisa-bar > div { height: 100%; background: var(--accent); border-radius: 4px; }
+.nisa-row-foot { font-size: 11.5px; color: var(--text-faint); margin-top: 4px; text-align: right; }
+.nisa-year-title { font-size: 13px; font-weight: 600; margin: 10px 0 6px; }
+.nisa-input-row { display: flex; gap: 10px; }
+.nisa-input-row label { flex: 1; font-size: 12px; color: var(--text-dim); }
+.nisa-input-row input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px; }
