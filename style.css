@@ -223,6 +223,15 @@ canvas.chart.tall { height: 220px; }
 .lock-version { position: absolute; top: calc(var(--safe-top) + 10px); right: 18px; font-size: 11.5px; color: var(--text-faint); letter-spacing: 0.04em; }
 .list-row .value-col { text-align: right; flex-shrink: 0; }
 .list-row .value-col .meta { margin-top: 2px; }
-/* iOSのホーム画面アプリで画面下に隙間ができる場合、隙間がホームインジケーターの分を兼ねるので
-   タブバー側の下余白(セーフエリア分)は付けずに詰める */
-html.has-bottom-gap .tabbar { padding-bottom: 6px; }
+/* iOS 26 のホーム画面アプリ(black-translucent + viewport-fit=cover)では、WebKitの不具合で
+   画面の高さがステータスバーの分だけ短く伝わり、下に塗れない帯ができる(WebKit bug 301108)。
+   ホーム画面アプリのときだけ、高さを「100% + ステータスバー分」(ただし画面の高さ100lvhを超えない)に広げる。
+   固定配置(position: fixed)だと短い表示領域で切られるので、ここでは通常配置にする。 */
+@media (display-mode: standalone) {
+  html, body {
+    position: relative;
+    inset: auto;
+    height: min(100lvh, calc(100% + var(--safe-top)));
+  }
+  body { height: 100%; }
+}
