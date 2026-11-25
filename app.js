@@ -654,15 +654,15 @@ function renderHistoryList() {
     const prevTotal = idx > 0 ? valueFor(months[idx - 1]) : null;
     const row = document.createElement('div');
     row.className = 'list-row tappable';
-    const deltaHtml = prevTotal !== null ? `<span class="meta" style="color:${diffColor(total - prevTotal)}">${signed(total - prevTotal)}</span>` : '';
+    const deltaHtml = prevTotal !== null ? `<div class="meta" style="color:${diffColor(total - prevTotal)}">${signed(total - prevTotal)}</div>` : '';
     const recordedAt = lastRecordedAtForMonth(ym);
     const recordedHtml = recordedAt ? `<div class="meta">${formatRecordedDate(recordedAt)}</div>` : '';
     const breakdownHtml = seriesId === 'total'
       ? `<div class="meta breakdown">${breakdownForMonth(ym).map((b) => `<span><span style="color:${b.color}">●</span>${escapeHtml(b.label)} ${Charts.formatYenShort(b.value)}</span>`).join('')}</div>`
       : '';
     row.innerHTML = `
-      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${deltaHtml}${breakdownHtml}${recordedHtml}</div></div>
-      <div class="value">${Charts.formatYen(total)}</div>
+      <div class="main"><div><div class="name">${ymLabelFull(ym)}</div>${breakdownHtml}${recordedHtml}</div></div>
+      <div class="value-col"><div class="value">${Charts.formatYen(total)}</div>${deltaHtml}</div>
     `;
     row.addEventListener('click', () => { recordViewYm = ym; switchView('record'); });
     list.appendChild(row);
@@ -991,7 +991,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.6.3';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function checkAppVersion() {
   document.getElementById('version-current').textContent = `v${APP_VERSION}`;
