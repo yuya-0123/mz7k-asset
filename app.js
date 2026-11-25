@@ -347,12 +347,19 @@ document.querySelectorAll('#home-range-picker button').forEach((b) => {
     renderHomeTrendChart();
   });
 });
+// 月数に合わせて目盛りの間隔を決める（ラベルが7個程度に収まるように）
+function niceLabelStep(n) {
+  return [1, 2, 3, 6, 12, 24, 36, 60].find((st) => n / st <= 6) || 120;
+}
+function ymDiff(a, b) { return (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + (Number(b.slice(5, 7)) - Number(a.slice(5, 7))); }
 function homeTrendPoints(range) {
-  const cfg = HOME_RANGES[range] || HOME_RANGES['6m'];
   const months = recordedMonths();
   if (months.length === 0) return [];
   const firstYm = months[0];
   const lastYm = months[months.length - 1];
+  const cfg = range === 'all'
+    ? { months: ymDiff(firstYm, lastYm), labelStep: niceLabelStep(ymDiff(firstYm, lastYm)) }
+    : (HOME_RANGES[range] || HOME_RANGES['6m']);
   const points = [];
   let carried = null;
   // 範囲より前の最後の記録を、範囲の先頭の穴埋め用に拾っておく
@@ -653,7 +660,7 @@ function renderHistorySeriesPicker() {
     b.addEventListener('click', () => { historySelectedSeries = b.dataset.series; renderHistoryChart(); renderHistorySeriesPicker(); renderHistoryList(); });
   });
 }
-// 履歴グラフ: 年別=1〜12月の1年分(左右スワイプか ‹ › で年を切替) / 全期間=記録した全期間。
+// 履歴グラフ: 年別=1〜12月の1年分(左右スワイプか ‹ › で年を切替) / 3年=最新の記録月から3年分 / 全期間=記録した全期間。
 // 増減は 年別=前年最後の記録と比較(前年がなければその年最初の記録)、全期間=最初の記録と比較。
 let historyMode = 'year';
 let historyYear = null;
@@ -706,12 +713,34 @@ function renderHistoryChart() {
     deltaEl.className = 'total-sub ' + (diff == null ? '' : diff > 0 ? 'up' : diff < 0 ? 'down' : '');
   };
   const signed = (d) => yenSigned(d);
-  navEl.classList.toggle('all-mode', historyMode === 'all');
+  navEl.classList.toggle('all-mode', historyMode !== 'year');
 
   if (months.length === 0) {
-    titleEl.textContent = historyMode === 'all' ? '全期間' : '-';
+    titleEl.textContent = historyMode === 'all' ? '全期間' : historyMode === '3y' ? '直近3年' : '-';
     setDelta('', null);
     Charts.drawLineChart(canvas, [], series.color, amountsMasked());
+    return;
+  }
+
+  if (historyMode === '3y') {
+    titleEl.textContent = '直近3年';
+    const lastYm = months[months.length - 1];
+    const startYm = ymAdd(lastYm, -36);
+    const recorded = new Set(months);
+    const points = [];
+    for (let i = 36; i >= 0; i--) {
+      const ym = ymAdd(lastYm, -i);
+      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null, showLabel: i % 6 === 0 });
+    }
+    Charts.drawLineChart(canvas, points, series.color, amountsMasked());
+    // 3年前(またはそれ以前)の最後の記録と比較。なければ範囲内の最初の記録と比較
+    const before = months.filter((ym) => ym <= startYm);
+    const baseYm = before.length ? before[before.length - 1] : months.find((ym) => ym > startYm);
+    if (baseYm === lastYm) setDelta(`${ymLabelFull(lastYm)}時点　${yen(valueFor(lastYm))}`, null);
+    else {
+      const diff = valueFor(lastYm) - valueFor(baseYm);
+      setDelta(`3年間の増減（${baseYm.slice(2, 4)}年${Number(baseYm.slice(5, 7))}月比）　${signed(diff)}`, diff);
+    }
     return;
   }
 
@@ -783,7 +812,10 @@ function renderHistoryList() {
   if (!years.includes(historyYear)) historyYear = years[years.length - 1];
   const diffColor = (d) => (d > 0 ? 'var(--success)' : d < 0 ? 'var(--danger)' : 'var(--text-faint)');
   const signed = (d) => yenSigned(d, true);
-  const yMonths = historyMode === 'all' ? months : months.filter((ym) => ym.slice(0, 4) === historyYear);
+  const last3 = months.length ? ymAdd(months[months.length - 1], -36) : '';
+  const yMonths = historyMode === 'all' ? months
+    : historyMode === '3y' ? months.filter((ym) => ym >= last3)
+    : months.filter((ym) => ym.slice(0, 4) === historyYear);
   yMonths.slice().reverse().forEach((ym) => {
     const total = valueFor(ym);
     const idx = months.indexOf(ym);
@@ -1137,7 +1169,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.7.4';
+const APP_VERSION = '1.7.5';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
