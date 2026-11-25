@@ -441,6 +441,8 @@ function renderHome() {
     prEl.classList.add('hidden');
   }
 
+  renderHomeNisa();
+
   // リマインダーバナー
   const banner = document.getElementById('home-banner-slot');
   const day = new Date().getDate();
@@ -1101,6 +1103,87 @@ function openBulkPrincipalModal(acc) {
   });
 }
 
+// ---------- 新NISAの残り枠 ----------
+// 年間: つみたて120万・成長240万。生涯: 合計1800万(うち成長は1200万まで)。売却での枠の復活は考えない
+const NISA_LIMITS = { tsumitateYear: 1200000, growthYear: 2400000, lifetime: 18000000, growthLifetime: 12000000 };
+const NISA_START_YEAR = 2024;
+function nisaUsage() { return STATE.settings.nisaUsage || {}; }
+function hasNisaUsage() { return Object.values(nisaUsage()).some((u) => (u.tsumitate || 0) > 0 || (u.growth || 0) > 0); }
+function nisaSummary(year) {
+  const usage = nisaUsage();
+  let tsuTotal = 0, groTotal = 0;
+  Object.values(usage).forEach((u) => { tsuTotal += u.tsumitate || 0; groTotal += u.growth || 0; });
+  const cur = usage[year] || {};
+  const lifeLeft = Math.max(0, NISA_LIMITS.lifetime - tsuTotal - groTotal);
+  return {
+    year,
+    tsuYearUsed: cur.tsumitate || 0, groYearUsed: cur.growth || 0,
+    tsuYearLeft: Math.max(0, NISA_LIMITS.tsumitateYear - (cur.tsumitate || 0)),
+    groYearLeft: Math.max(0, NISA_LIMITS.growthYear - (cur.growth || 0)),
+    lifeUsed: tsuTotal + groTotal, lifeLeft,
+    groLifeUsed: groTotal, groLifeLeft: Math.min(lifeLeft, Math.max(0, NISA_LIMITS.growthLifetime - groTotal)),
+  };
+}
+function nisaBar(label, used, limit, left) {
+  const pct = Math.min(100, (used / limit) * 100);
+  return `<div class="nisa-row">
+    <div class="nisa-row-head"><span>${label}</span><span>残り <b>${yen(left)}</b></span></div>
+    <div class="nisa-bar"><div style="width:${pct}%"></div></div>
+    <div class="nisa-row-foot">${yenShort(used)} / ${Charts.formatYenShort(limit)} 使用</div>
+  </div>`;
+}
+function renderHomeNisa() {
+  const card = document.getElementById('home-nisa');
+  if (!hasNisaUsage()) { card.classList.add('hidden'); return; }
+  const y = new Date().getFullYear();
+  const s = nisaSummary(y);
+  document.getElementById('home-nisa-body').innerHTML = `
+    <div class="nisa-section">${y}年</div>
+    ${nisaBar('つみたて投資枠', s.tsuYearUsed, NISA_LIMITS.tsumitateYear, s.tsuYearLeft)}
+    ${nisaBar('成長投資枠', s.groYearUsed, NISA_LIMITS.growthYear, s.groYearLeft)}
+    <div class="nisa-section">生涯</div>
+    ${nisaBar('合計', s.lifeUsed, NISA_LIMITS.lifetime, s.lifeLeft)}
+    ${nisaBar('うち成長投資枠', s.groLifeUsed, NISA_LIMITS.growthLifetime, s.groLifeLeft)}
+  `;
+  card.classList.remove('hidden');
+}
+function openNisaModal() {
+  const usage = nisaUsage();
+  const thisYear = new Date().getFullYear();
+  const years = [];
+  for (let y = NISA_START_YEAR; y <= thisYear; y++) years.push(y);
+  openModal(`
+    <h3>NISAの利用額</h3>
+    <p class="bulk-help">年ごとに、つみたて投資枠・成長投資枠で買った金額(買付額の合計)を入力してください。証券会社の「NISA枠の利用状況」の数字がそのまま使えます。ホームに残り枠が表示されます。</p>
+    ${years.map((y) => `
+      <div class="nisa-year-title">${y}年</div>
+      <div class="nisa-input-row">
+        <label>つみたて<input type="number" inputmode="numeric" data-nisa-year="${y}" data-nisa-kind="tsumitate" value="${usage[y] && usage[y].tsumitate ? usage[y].tsumitate : ''}" placeholder="0"></label>
+        <label>成長<input type="number" inputmode="numeric" data-nisa-year="${y}" data-nisa-kind="growth" value="${usage[y] && usage[y].growth ? usage[y].growth : ''}" placeholder="0"></label>
+      </div>`).join('')}
+    <button class="btn" id="nisa-save" style="margin:14px 0 10px;">保存</button>
+    <button class="btn secondary" id="nisa-cancel">キャンセル</button>
+  `);
+  document.getElementById('nisa-cancel').addEventListener('click', closeModal);
+  document.getElementById('nisa-save').addEventListener('click', async () => {
+    const next = {};
+    document.querySelectorAll('[data-nisa-year]').forEach((input) => {
+      const v = input.value === '' ? 0 : Math.max(0, Math.round(Number(input.value) || 0));
+      if (!v) return;
+      const y = input.dataset.nisaYear;
+      next[y] = next[y] || { tsumitate: 0, growth: 0 };
+      next[y][input.dataset.nisaKind] = v;
+    });
+    STATE.settings.nisaUsage = next;
+    await persist();
+    closeModal();
+    showToast('NISAの利用額を保存しました');
+    renderHomeNisa();
+  });
+}
+document.getElementById('btn-open-nisa').addEventListener('click', openNisaModal);
+document.getElementById('btn-edit-nisa').addEventListener('click', openNisaModal);
+
 // ---------- カテゴリ管理 ----------
 function renderCategoriesSettings() {
   const list = document.getElementById('categories-list');
@@ -1328,7 +1411,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
