@@ -1022,17 +1022,38 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.6.7';
+const APP_VERSION = '1.6.8';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
+async function fetchLatestVersion() {
+  const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('bad status');
+  return (await res.json()).version;
+}
+// ロック画面: 新しいバージョンがあれば右上に「更新」ボタンを出す（ロック解除せずに更新できる）
+async function checkLockScreenVersion() {
+  const btn = document.getElementById('btn-lock-update');
+  try {
+    const latest = await fetchLatestVersion();
+    if (latest && latest !== APP_VERSION) {
+      btn.textContent = `v${latest} に更新`;
+      btn.classList.remove('hidden');
+    } else {
+      btn.classList.add('hidden');
+    }
+  } catch (e) {
+    // オフライン時は何も出さない
+  }
+}
+checkLockScreenVersion();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkLockScreenVersion(); });
+document.getElementById('btn-lock-update').addEventListener('click', () => forceUpdate());
 async function checkAppVersion() {
   document.getElementById('version-current').textContent = `v${APP_VERSION}`;
   const el = document.getElementById('version-status');
   el.className = 'version-status';
   el.textContent = '確認中…';
   try {
-    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error('bad status');
-    const latest = (await res.json()).version;
+    const latest = await fetchLatestVersion();
     if (latest === APP_VERSION) {
       el.textContent = '✓ 最新版です';
       el.className = 'version-status ok';
@@ -1045,7 +1066,8 @@ async function checkAppVersion() {
   }
 }
 
-document.getElementById('btn-force-update').addEventListener('click', async () => {
+document.getElementById('btn-force-update').addEventListener('click', () => forceUpdate());
+async function forceUpdate() {
   const ok = await confirmDialog('最新版に更新しますか？', 'アプリの表示・機能だけを最新の状態に更新します。口座データや記録、PINなどは一切削除されません。', '更新する', false);
   if (!ok) return;
   const cleanup = (async () => {
@@ -1064,7 +1086,7 @@ document.getElementById('btn-force-update').addEventListener('click', async () =
   })();
   await Promise.race([cleanup, new Promise((resolve) => setTimeout(resolve, 2500))]);
   location.reload();
-});
+}
 
 document.getElementById('btn-wipe-all').addEventListener('click', async () => {
   const ok = await confirmDialog('全データを削除しますか？', '口座情報・記録・PIN設定などすべてのデータが完全に削除されます。事前にバックアップを書き出していない場合、復元できません。', '完全に削除する');
