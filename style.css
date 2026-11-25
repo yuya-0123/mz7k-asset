@@ -269,3 +269,5 @@ canvas.chart.tall { height: 220px; }
 
 /* 記録タブ: 非表示口座を出すボタン */
 .record-show-hidden { display: block; margin: 4px auto 10px; background: none; border: none; color: var(--accent); font: inherit; font-size: 13px; padding: 6px 10px; }
+/* 目隠しモード: 記録タブの入力欄は、タップして入力している間だけ数字が見える */
+body.amounts-masked #record-groups input:not(:focus) { -webkit-text-security: disc; text-security: disc; }
