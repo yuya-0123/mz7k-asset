@@ -304,6 +304,44 @@ document.getElementById('btn-toggle-amounts').addEventListener('click', async ()
   await persist();
   renderHome();
 });
+// 推移グラフの表示期間。最後に記録した月から遡って 半年/1年/3年 分を毎月描く。
+// 目盛りのラベルは 半年=毎月 / 1年=2か月おき / 3年=半年おき(最後に記録した月を基準)。
+// 記録がない月は直前に記録した月の合計で埋める。最初の記録より前は描かない。
+const HOME_RANGES = { '6m': { months: 6, labelStep: 1 }, '1y': { months: 12, labelStep: 2 }, '3y': { months: 36, labelStep: 6 } };
+let homeRange = '6m';
+document.querySelectorAll('#home-range-picker button').forEach((b) => {
+  b.addEventListener('click', () => {
+    homeRange = b.dataset.range;
+    document.querySelectorAll('#home-range-picker button').forEach((x) => x.classList.toggle('selected', x === b));
+    renderHomeTrendChart();
+  });
+});
+function homeTrendPoints(range) {
+  const cfg = HOME_RANGES[range] || HOME_RANGES['6m'];
+  const months = recordedMonths();
+  if (months.length === 0) return [];
+  const firstYm = months[0];
+  const lastYm = months[months.length - 1];
+  const points = [];
+  let carried = null;
+  // 範囲より前の最後の記録を、範囲の先頭の穴埋め用に拾っておく
+  const startYm = ymAdd(lastYm, -cfg.months);
+  const before = months.filter((ym) => ym < startYm);
+  if (before.length) carried = totalForMonth(before[before.length - 1]);
+  const recorded = new Set(months);
+  for (let i = cfg.months; i >= 0; i--) {
+    const ym = ymAdd(lastYm, -i);
+    if (ym < firstYm) continue;
+    if (recorded.has(ym)) carried = totalForMonth(ym);
+    const label = range === '6m' ? ymLabelShort(ym) : `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`;
+    points.push({ label, value: carried, showLabel: i % cfg.labelStep === 0 });
+  }
+  return points;
+}
+function renderHomeTrendChart() {
+  const hidden = !!STATE.settings.hideAmounts;
+  Charts.drawLineChart(document.getElementById('home-trend-chart'), homeTrendPoints(homeRange), '#4f9dff', hidden);
+}
 function renderHome() {
   const hidden = !!STATE.settings.hideAmounts;
   document.getElementById('btn-toggle-amounts').innerHTML = hidden ? ICON_EYE_OFF : ICON_EYE;
@@ -342,8 +380,7 @@ function renderHome() {
     banner.innerHTML = '';
   }
 
-  const points = months.slice(-12).map((ym) => ({ label: ymLabelShort(ym), value: totalForMonth(ym) }));
-  Charts.drawLineChart(document.getElementById('home-trend-chart'), points, '#4f9dff', hidden);
+  renderHomeTrendChart();
 
   document.getElementById('home-breakdown-month').textContent = latestYm ? ymLabelFull(latestYm) : '-';
   const breakdown = latestYm ? breakdownForMonth(latestYm) : [];

@@ -125,7 +125,10 @@ const Charts = (() => {
     ctx.stroke();
 
     // 点
+    // 点が多いとき(長期間表示)は最新の点だけ描く
+    const dense = points.length > 14;
     points.forEach((p, i) => {
+      if (dense && i !== points.length - 1) return;
       const px = x(i), py = y(p.value);
       ctx.beginPath();
       ctx.arc(px, py, i === points.length - 1 ? 4 : 2.5, 0, Math.PI * 2);
@@ -142,8 +145,10 @@ const Charts = (() => {
     ctx.textBaseline = 'top';
     const maxLabels = Math.max(2, Math.floor(plotW / 56));
     const step = Math.max(1, Math.ceil(points.length / maxLabels));
+    // 呼び出し側が showLabel を指定していればそれに従う
+    const explicit = points.some((p) => typeof p.showLabel === 'boolean');
     points.forEach((p, i) => {
-      if (i % step !== 0 && i !== points.length - 1) return;
+      if (explicit ? !p.showLabel : (i % step !== 0 && i !== points.length - 1)) return;
       ctx.fillText(p.label, x(i), padT + plotH + 6);
     });
   }
