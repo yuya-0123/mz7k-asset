@@ -220,7 +220,10 @@ canvas.chart.tall { height: 220px; }
 /* 履歴: 年の見出しは固定、月のリストだけスクロール */
 #history-list { overscroll-behavior: contain; }
 #screen-unlock { position: relative; }
-.lock-version { position: absolute; top: calc(var(--safe-top) + 10px); right: 18px; font-size: 11.5px; color: var(--text-faint); letter-spacing: 0.04em; }
+.lock-version-wrap { position: absolute; top: calc(var(--safe-top) + 10px); right: 18px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.lock-version { font-size: 11.5px; color: var(--text-faint); letter-spacing: 0.04em; }
+.lock-update { font: inherit; font-size: 12px; font-weight: 600; color: #fff; background: var(--warning, #f59e0b); border: none; border-radius: 999px; padding: 5px 11px; cursor: pointer; }
+.lock-update.hidden { display: none; }
 .list-row .value-col { text-align: right; flex-shrink: 0; }
 .list-row .value-col .meta { margin-top: 2px; }
 /* iOS 26 のホーム画面アプリ(black-translucent + viewport-fit=cover)では、WebKitの不具合で
