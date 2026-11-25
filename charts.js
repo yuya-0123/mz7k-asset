@@ -74,21 +74,23 @@ const Charts = (() => {
     }
   }
 
-  function drawLineChart(canvas, points, color = '#4f9dff', masked = false) {
+  // points[i].value が null の点は線を描かずに x 位置だけ確保する(1年分の枠を固定したいときなど)
+  function drawLineChart(canvas, points, color = '#4f9dff', masked = false, emptyText = '記録がまだありません') {
     const { ctx, width, height } = setupCanvas(canvas);
     ctx.clearRect(0, 0, width, height);
-    if (!points || points.length === 0) {
+    const idx = (points || []).map((p, i) => (p.value == null ? -1 : i)).filter((i) => i >= 0);
+    if (idx.length === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = '13px -apple-system, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('記録がまだありません', width / 2, height / 2);
+      ctx.fillText(emptyText, width / 2, height / 2);
       return;
     }
     const padL = 54, padR = 14, padT = 16, padB = 26;
     const plotW = width - padL - padR;
     const plotH = height - padT - padB;
 
-    const values = points.map((p) => p.value);
+    const values = idx.map((i) => points[i].value);
     const axis = computeAxis(values);
     const niceMin = axis.niceMin;
     const niceRange = (axis.niceMax - axis.niceMin) || 1;
@@ -98,40 +100,41 @@ const Charts = (() => {
 
     drawAxisGrid(ctx, axis, padL, padR, width, y, masked);
 
+    const tracePath = () => {
+      idx.forEach((i, k) => {
+        const px = x(i), py = y(points[i].value);
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+    };
+    const first = idx[0], last = idx[idx.length - 1];
+
     // エリア塗り
     const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
     grad.addColorStop(0, hexToRgba(color, 0.35));
     grad.addColorStop(1, hexToRgba(color, 0.02));
     ctx.beginPath();
-    points.forEach((p, i) => {
-      const px = x(i), py = y(p.value);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.lineTo(x(points.length - 1), padT + plotH);
-    ctx.lineTo(x(0), padT + plotH);
+    tracePath();
+    ctx.lineTo(x(last), padT + plotH);
+    ctx.lineTo(x(first), padT + plotH);
     ctx.closePath();
     ctx.fillStyle = grad;
     ctx.fill();
 
     // ライン
     ctx.beginPath();
-    points.forEach((p, i) => {
-      const px = x(i), py = y(p.value);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
+    tracePath();
     ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.stroke();
 
-    // 点
-    // 点が多いとき(長期間表示)は最新の点だけ描く
+    // 点(点が多いとき=長期間表示は最新の点だけ描く)
     const dense = points.length > 14;
-    points.forEach((p, i) => {
-      if (dense && i !== points.length - 1) return;
-      const px = x(i), py = y(p.value);
+    idx.forEach((i) => {
+      if (dense && i !== last) return;
+      const px = x(i), py = y(points[i].value);
       ctx.beginPath();
-      ctx.arc(px, py, i === points.length - 1 ? 4 : 2.5, 0, Math.PI * 2);
+      ctx.arc(px, py, i === last ? 4 : 2.5, 0, Math.PI * 2);
       ctx.fillStyle = '#0b1220';
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;

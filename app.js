@@ -517,39 +517,122 @@ function renderHistorySeriesPicker() {
     b.addEventListener('click', () => { historySelectedSeries = b.dataset.series; renderHistoryChart(); renderHistorySeriesPicker(); renderHistoryList(); });
   });
 }
+// 履歴グラフ: 年別=1〜12月の1年分(左右スワイプか ‹ › で年を切替) / 全期間=記録した全期間。
+// 増減は 年別=前年最後の記録と比較(前年がなければその年最初の記録)、全期間=最初の記録と比較。
+let historyMode = 'year';
+let historyYear = null;
+function historyYears(seriesId) {
+  return Array.from(new Set(recordedMonths().filter((ym) => seriesHasRecord(seriesId, ym)).map((ym) => ym.slice(0, 4)))).sort();
+}
+function shiftHistoryYear(dir) {
+  const years = historyYears(historySelectedSeries);
+  const i = years.indexOf(historyYear);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= years.length) return;
+  historyYear = years[j];
+  renderHistoryChart();
+}
+document.getElementById('history-year-prev').addEventListener('click', () => shiftHistoryYear(-1));
+document.getElementById('history-year-next').addEventListener('click', () => shiftHistoryYear(1));
+document.querySelectorAll('#history-mode-picker button').forEach((b) => {
+  b.addEventListener('click', () => {
+    historyMode = b.dataset.mode;
+    document.querySelectorAll('#history-mode-picker button').forEach((x) => x.classList.toggle('selected', x === b));
+    renderHistoryChart();
+  });
+});
+(() => {
+  const canvas = document.getElementById('history-trend-chart');
+  let sx = null, sy = null;
+  canvas.addEventListener('touchstart', (e) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; }, { passive: true });
+  canvas.addEventListener('touchend', (e) => {
+    if (sx === null || historyMode !== 'year') return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    sx = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) shiftHistoryYear(dx < 0 ? 1 : -1);
+  });
+})();
 function renderHistoryChart() {
-  const months = recordedMonths();
   const seriesList = historySeriesList();
   const series = seriesList.find((s) => s.id === historySelectedSeries) || seriesList[0];
   const deltaEl = document.getElementById('history-series-delta');
-  const legendEl = document.getElementById('history-legend');
+  const titleEl = document.getElementById('history-chart-title');
+  const navEl = document.getElementById('history-year-nav');
+  const canvas = document.getElementById('history-trend-chart');
+  document.getElementById('history-legend').innerHTML = '';
+  const valueFor = (ym) => (series.id === 'total' ? totalForMonth(ym) : categoryTotalForMonth(series.id, ym));
+  const months = recordedMonths().filter((ym) => seriesHasRecord(series.id, ym));
+  const setDelta = (text, diff) => {
+    deltaEl.textContent = text;
+    deltaEl.className = 'total-sub ' + (diff == null ? '' : diff > 0 ? 'up' : diff < 0 ? 'down' : '');
+  };
+  const signed = (d) => `${d > 0 ? '+' : ''}${Charts.formatYen(d)}`;
+  navEl.classList.toggle('all-mode', historyMode === 'all');
 
-  legendEl.innerHTML = '';
-
-  const valueForMonth = (ym) => (series.id === 'total' ? totalForMonth(ym) : categoryTotalForMonth(series.id, ym));
-  const points = months.map((ym) => ({ label: ymLabelShort(ym), value: valueForMonth(ym) }));
-  Charts.drawLineChart(document.getElementById('history-trend-chart'), points, series.color);
-
-  // 収支: 最新の記録がある年の増減。基準は前年最後の記録(なければその年最初の記録)。
-  const seriesMonths = months.filter((ym) => seriesHasRecord(series.id, ym));
-  if (seriesMonths.length === 0) {
-    deltaEl.textContent = '';
-    deltaEl.className = 'total-sub';
+  if (months.length === 0) {
+    titleEl.textContent = historyMode === 'all' ? '全期間' : '-';
+    setDelta('', null);
+    Charts.drawLineChart(canvas, [], series.color);
     return;
   }
-  const lastYm = seriesMonths[seriesMonths.length - 1];
-  const year = lastYm.slice(0, 4);
-  const prevYearMonths = seriesMonths.filter((ym) => ym.slice(0, 4) < year);
-  const baseYm = prevYearMonths.length ? prevYearMonths[prevYearMonths.length - 1] : seriesMonths.find((ym) => ym.slice(0, 4) === year);
-  if (baseYm === lastYm) {
-    deltaEl.textContent = `${ymLabelFull(lastYm)}時点　${Charts.formatYen(valueForMonth(lastYm))}`;
-    deltaEl.className = 'total-sub';
+
+  if (historyMode === 'all') {
+    titleEl.textContent = '全期間';
+    const recorded = new Set(months);
+    const points = [];
+    for (let ym = months[0]; ym <= months[months.length - 1]; ym = ymAdd(ym, 1)) {
+      points.push({ label: `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`, value: recorded.has(ym) ? valueFor(ym) : null });
+    }
+    Charts.drawLineChart(canvas, points, series.color);
+    // 年ごとの増減の横棒(前年最後の記録と比較。最初の年はその年最初の記録と比較)
+    const yrs = historyYears(series.id);
+    const rows = yrs.map((y) => {
+      const ym = months.filter((m) => m.slice(0, 4) === y);
+      const prev = months.filter((m) => m.slice(0, 4) < y);
+      const base = prev.length ? prev[prev.length - 1] : ym[0];
+      return { y, diff: valueFor(ym[ym.length - 1]) - valueFor(base) };
+    });
+    const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.diff)));
+    document.getElementById('history-legend').innerHTML = rows.slice().reverse().map((r) => `
+      <div class="year-bar">
+        <span class="y">${r.y}</span>
+        <span class="track"><span class="fill ${r.diff < 0 ? 'neg' : ''}" style="width:${Math.round((Math.abs(r.diff) / maxAbs) * 100)}%"></span></span>
+        <span class="v ${r.diff > 0 ? 'up' : r.diff < 0 ? 'down' : ''}">${r.diff > 0 ? '+' : ''}${Charts.formatYenShort(r.diff)}</span>
+      </div>`).join('');
+    const first = months[0], last = months[months.length - 1];
+    if (first === last) setDelta(`${ymLabelFull(last)}時点　${Charts.formatYen(valueFor(last))}`, null);
+    else {
+      const diff = valueFor(last) - valueFor(first);
+      setDelta(`${first.slice(2, 4)}年${Number(first.slice(5, 7))}月から　${signed(diff)}`, diff);
+    }
     return;
   }
-  const diff = valueForMonth(lastYm) - valueForMonth(baseYm);
-  const sign = diff > 0 ? '+' : '';
-  deltaEl.textContent = `${Number(year)}年の増減（${baseYm.slice(2, 4)}年${Number(baseYm.slice(5, 7))}月比）　${sign}${Charts.formatYen(diff)}`;
-  deltaEl.className = 'total-sub ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '');
+
+  const years = historyYears(series.id);
+  if (!years.includes(historyYear)) historyYear = years[years.length - 1];
+  const yi = years.indexOf(historyYear);
+  titleEl.textContent = `${historyYear}年`;
+  document.getElementById('history-year-prev').disabled = yi <= 0;
+  document.getElementById('history-year-next').disabled = yi >= years.length - 1;
+
+  const recorded = new Set(months);
+  const points = [];
+  for (let m = 1; m <= 12; m++) {
+    const ym = `${historyYear}-${String(m).padStart(2, '0')}`;
+    points.push({ label: String(m), value: recorded.has(ym) ? valueFor(ym) : null, showLabel: true });
+  }
+  Charts.drawLineChart(canvas, points, series.color, false, 'この年の記録はありません');
+
+  const yMonths = months.filter((ym) => ym.slice(0, 4) === historyYear);
+  const lastYm = yMonths[yMonths.length - 1];
+  const prev = months.filter((ym) => ym.slice(0, 4) < historyYear);
+  const baseYm = prev.length ? prev[prev.length - 1] : yMonths[0];
+  if (baseYm === lastYm) setDelta(`${ymLabelFull(lastYm)}時点　${Charts.formatYen(valueFor(lastYm))}`, null);
+  else {
+    const diff = valueFor(lastYm) - valueFor(baseYm);
+    setDelta(`年間の増減（${baseYm.slice(2, 4)}年${Number(baseYm.slice(5, 7))}月比）　${signed(diff)}`, diff);
+  }
 }
 function seriesHasRecord(seriesId, ym) {
   if (seriesId === 'total') return STATE.records.some((r) => r.yearMonth === ym);
