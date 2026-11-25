@@ -82,7 +82,14 @@
           <canvas class="chart" id="home-trend-chart"></canvas>
         </div>
         <div class="card chart-card">
-          <h3>資産配分（<span id="home-breakdown-month"></span>）</h3>
+          <div class="pie-head">
+            <h3 style="margin:0;">資産配分</h3>
+            <div class="history-year-nav pie-month-nav">
+              <button type="button" id="home-pie-prev" aria-label="前の月">‹</button>
+              <span id="home-breakdown-month">-</span>
+              <button type="button" id="home-pie-next" aria-label="次の月">›</button>
+            </div>
+          </div>
           <div style="display:flex;align-items:center;gap:16px;">
             <canvas id="home-pie-chart" width="140" height="140" style="width:140px;height:140px;flex-shrink:0;"></canvas>
             <div id="home-pie-legend" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:9px;"></div>

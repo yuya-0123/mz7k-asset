@@ -382,8 +382,30 @@ function renderHome() {
 
   renderHomeTrendChart();
 
-  document.getElementById('home-breakdown-month').textContent = latestYm ? ymLabelFull(latestYm) : '-';
-  const breakdown = latestYm ? breakdownForMonth(latestYm) : [];
+  renderHomePie();
+}
+
+// 資産配分: ‹ › で記録済みの月を切替(初期は最新の月)
+let homePieYm = null;
+function shiftHomePie(dir) {
+  const months = recordedMonths();
+  const i = months.indexOf(homePieYm);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= months.length) return;
+  homePieYm = months[j];
+  renderHomePie();
+}
+document.getElementById('home-pie-prev').addEventListener('click', () => shiftHomePie(-1));
+document.getElementById('home-pie-next').addEventListener('click', () => shiftHomePie(1));
+function renderHomePie() {
+  const hidden = !!STATE.settings.hideAmounts;
+  const months = recordedMonths();
+  if (!months.includes(homePieYm)) homePieYm = months.length ? months[months.length - 1] : null;
+  const i = months.indexOf(homePieYm);
+  document.getElementById('home-pie-prev').disabled = i <= 0;
+  document.getElementById('home-pie-next').disabled = i < 0 || i >= months.length - 1;
+  document.getElementById('home-breakdown-month').textContent = homePieYm ? ymLabelFull(homePieYm) : '-';
+  const breakdown = homePieYm ? breakdownForMonth(homePieYm) : [];
   Charts.drawPieChart(document.getElementById('home-pie-chart'), breakdown, hidden);
   const legendEl = document.getElementById('home-pie-legend');
   const breakdownTotal = breakdown.reduce((s, it) => s + it.value, 0) || 1;
@@ -401,6 +423,7 @@ function renderHome() {
     }).join('');
   }
 }
+
 
 // ---------- 記録画面 ----------
 function renderRecordView() {
@@ -991,7 +1014,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.6.5';
+const APP_VERSION = '1.6.6';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function checkAppVersion() {
   document.getElementById('version-current').textContent = `v${APP_VERSION}`;
