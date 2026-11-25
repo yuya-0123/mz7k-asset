@@ -372,7 +372,7 @@ function homeTrendPoints(range) {
     if (ym < firstYm) continue;
     if (recorded.has(ym)) carried = totalForMonth(ym);
     const label = `${ym.slice(2, 4)}/${Number(ym.slice(5, 7))}`;
-    points.push({ label, value: carried, showLabel: i % cfg.labelStep === 0, tip: recorded.has(ym) ? ymLabelFull(ym) : `${ymLabelFull(ym)}（記録なし・前の値）` });
+    points.push({ label, value: carried, showLabel: i % cfg.labelStep === 0, tip: ymLabelFull(ym), noDot: !recorded.has(ym) });
   }
   return points;
 }
@@ -1171,7 +1171,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.7.7';
+const APP_VERSION = '1.7.8';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });

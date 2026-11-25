@@ -135,6 +135,7 @@ const Charts = (() => {
     // 点(点が多いとき=長期間表示は最新の点だけ描く)
     const dense = points.length > 14;
     idx.forEach((i) => {
+      if (points[i].noDot) return; // 記録がない月(前の値で線をつないでいるだけ)は点を描かない
       if (dense && i !== last) return;
       const px = x(i), py = y(points[i].value);
       ctx.beginPath();
@@ -146,7 +147,7 @@ const Charts = (() => {
       ctx.stroke();
     });
 
-    canvas._hitPoints = idx.map((i) => ({ i, x: x(i), y: y(points[i].value) }));
+    canvas._hitPoints = idx.filter((i) => !points[i].noDot).map((i) => ({ i, x: x(i), y: y(points[i].value) }));
 
     // x軸ラベル(間引き表示)
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
