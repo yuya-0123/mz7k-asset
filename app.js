@@ -242,7 +242,7 @@ function enterMainApp() {
   switchView('home');
 }
 
-const VIEW_TITLES = { home: 'ホーム', record: '資産を記録', history: '履歴', accounts: '口座管理', settings: '設定' };
+const VIEW_TITLES = { home: 'ホーム', record: '資産を記録', history: '履歴', settings: '設定' };
 function switchView(view) {
   document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
   document.getElementById('view-' + view).classList.remove('hidden');
@@ -252,7 +252,6 @@ function switchView(view) {
   if (view === 'home') renderHome();
   if (view === 'record') { recordViewYm = recordViewYm || todayYm(); renderRecordView(); }
   if (view === 'history') renderHistory();
-  if (view === 'accounts') renderAccounts();
   if (view === 'settings') renderSettings();
 }
 document.querySelectorAll('.tabbar button').forEach((btn) => {
@@ -393,7 +392,7 @@ function renderHome() {
   const reminderDay = STATE.settings.reminderDay || 25;
   const alreadyThisMonth = months.includes(todayYm());
   if (STATE.accounts.length === 0) {
-    banner.innerHTML = `<div class="banner"><div class="emoji">🏦</div><div class="txt"><b>まずは口座を登録</b>「口座」タブからNISA口座や銀行口座などを追加しましょう。</div></div>`;
+    banner.innerHTML = `<div class="banner"><div class="emoji">🏦</div><div class="txt"><b>まずは口座を登録</b>「設定」タブの口座管理からNISA口座や銀行口座などを追加しましょう。</div></div>`;
   } else if (day >= reminderDay && !alreadyThisMonth) {
     banner.innerHTML = `<div class="banner"><div class="emoji">📝</div><div class="txt"><b>今月(${ymLabelFull(todayYm())})の資産を記録しましょう</b>「記録」タブからまとめて入力できます。</div></div>`;
   } else {
@@ -417,15 +416,76 @@ function shiftHomePie(dir) {
 }
 document.getElementById('home-pie-prev').addEventListener('click', () => shiftHomePie(-1));
 document.getElementById('home-pie-next').addEventListener('click', () => shiftHomePie(1));
-// 年月ホイールで選んだ月を表示。記録がない月を選んだら、いちばん近い記録月にする
-document.getElementById('home-pie-month-input').addEventListener('change', (e) => {
-  const v = e.target.value;
+// 年月ホイール: 年と月を別々に回して選ぶ。記録がない月はグレーで選べない（止まったら近い記録月に寄せる）
+document.getElementById('home-pie-month-btn').addEventListener('click', () => openYmPicker());
+function openYmPicker() {
   const months = recordedMonths();
-  if (!/^\d{4}-\d{2}$/.test(v) || months.length === 0) { renderHomePie(); return; }
-  const idx = (ym) => Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7));
-  homePieYm = months.reduce((best, m) => (Math.abs(idx(m) - idx(v)) < Math.abs(idx(best) - idx(v)) ? m : best), months[0]);
-  renderHomePie();
-});
+  if (months.length === 0) return;
+  const has = new Set(months);
+  const firstY = Number(months[0].slice(0, 4));
+  const lastY = Number(months[months.length - 1].slice(0, 4));
+  const years = [];
+  for (let y = firstY; y <= lastY; y++) years.push(String(y));
+  const ROW = 40;
+  let selY = (homePieYm || months[months.length - 1]).slice(0, 4);
+  let selM = Number((homePieYm || months[months.length - 1]).slice(5, 7));
+  const ymOf = (y, m) => `${y}-${String(m).padStart(2, '0')}`;
+  openModal(`
+    <div class="ym-picker-head"><button id="ym-cancel">キャンセル</button><span class="title">表示する月</span><button class="done" id="ym-done">完了</button></div>
+    <div class="ym-wheels">
+      <div class="ym-wheel" id="ym-wheel-y">${years.map((y) => `<div data-v="${y}" class="${months.some((m) => m.startsWith(y)) ? '' : 'off'}">${y}年</div>`).join('')}</div>
+      <div class="ym-wheel" id="ym-wheel-m">${Array.from({ length: 12 }, (_, k) => `<div data-v="${k + 1}">${k + 1}月</div>`).join('')}</div>
+    </div>
+  `);
+  const wy = document.getElementById('ym-wheel-y');
+  const wm = document.getElementById('ym-wheel-m');
+  const paintMonths = () => {
+    [...wm.children].forEach((el) => el.classList.toggle('off', !has.has(ymOf(selY, Number(el.dataset.v)))));
+  };
+  const scrollTo = (wheel, index, smooth) => wheel.scrollTo({ top: index * ROW, behavior: smooth ? 'smooth' : 'auto' });
+  // その年で m にいちばん近い記録月
+  const nearestMonth = (y, m) => {
+    const ok = [];
+    for (let k = 1; k <= 12; k++) if (has.has(ymOf(y, k))) ok.push(k);
+    if (ok.length === 0) return null;
+    return ok.reduce((b, k) => (Math.abs(k - m) < Math.abs(b - m) ? k : b), ok[0]);
+  };
+  // いちばん近い記録がある年
+  const nearestYear = (y) => {
+    const ok = years.filter((yy) => months.some((m) => m.startsWith(yy)));
+    return ok.reduce((b, yy) => (Math.abs(yy - y) < Math.abs(b - y) ? yy : b), ok[0]);
+  };
+  const settle = (wheel, fn) => {
+    let t = null;
+    wheel.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(fn, 120); });
+  };
+  settle(wy, () => {
+    const idx = Math.max(0, Math.min(years.length - 1, Math.round(wy.scrollTop / ROW)));
+    let y = years[idx];
+    if (!months.some((m) => m.startsWith(y))) { y = nearestYear(Number(y)); scrollTo(wy, years.indexOf(y), true); }
+    if (y === selY) return;
+    selY = y;
+    paintMonths();
+    const nm = nearestMonth(selY, selM);
+    if (nm !== selM) { selM = nm; scrollTo(wm, selM - 1, true); }
+  });
+  settle(wm, () => {
+    const m = Math.max(1, Math.min(12, Math.round(wm.scrollTop / ROW) + 1));
+    const nm = has.has(ymOf(selY, m)) ? m : nearestMonth(selY, m);
+    selM = nm;
+    if (nm !== m) scrollTo(wm, nm - 1, true);
+  });
+  wy.addEventListener('click', (e) => { const el = e.target.closest('[data-v]'); if (el) scrollTo(wy, years.indexOf(el.dataset.v), true); });
+  wm.addEventListener('click', (e) => { const el = e.target.closest('[data-v]'); if (el) scrollTo(wm, Number(el.dataset.v) - 1, true); });
+  paintMonths();
+  requestAnimationFrame(() => { scrollTo(wy, years.indexOf(selY), false); scrollTo(wm, selM - 1, false); });
+  document.getElementById('ym-cancel').addEventListener('click', closeModal);
+  document.getElementById('ym-done').addEventListener('click', () => {
+    const ym = ymOf(selY, selM);
+    if (has.has(ym)) { homePieYm = ym; renderHomePie(); }
+    closeModal();
+  });
+}
 function renderHomePie() {
   const hidden = !!STATE.settings.hideAmounts;
   const months = recordedMonths();
@@ -434,11 +494,7 @@ function renderHomePie() {
   document.getElementById('home-pie-prev').disabled = i <= 0;
   document.getElementById('home-pie-next').disabled = i < 0 || i >= months.length - 1;
   document.getElementById('home-breakdown-month').textContent = homePieYm ? ymLabelFull(homePieYm) : '-';
-  const monthInput = document.getElementById('home-pie-month-input');
-  monthInput.value = homePieYm || '';
-  monthInput.min = months[0] || '';
-  monthInput.max = months[months.length - 1] || '';
-  monthInput.disabled = months.length <= 1;
+  document.getElementById('home-pie-month-btn').disabled = months.length <= 1;
   const breakdown = homePieYm ? breakdownForMonth(homePieYm) : [];
   Charts.drawPieChart(document.getElementById('home-pie-chart'), breakdown, hidden);
   const legendEl = document.getElementById('home-pie-legend');
@@ -732,7 +788,7 @@ function renderAccounts() {
   const list = document.getElementById('accounts-list');
   list.innerHTML = '';
   if (STATE.accounts.length === 0) {
-    list.innerHTML = '<div class="empty-state">口座がまだ登録されていません。<br>上のボタンからNISA口座や銀行口座などを追加してください。</div>';
+    list.innerHTML = '<div class="empty-state">口座がまだ登録されていません。<br>下のボタンからNISA口座や銀行口座などを追加してください。</div>';
     return;
   }
   categories().forEach((cat) => {
@@ -927,6 +983,7 @@ function renderHistoryOrderSettings() {
 // ---------- 設定画面 ----------
 async function renderSettings() {
   checkAppVersion();
+  renderAccounts();
   renderCategoriesSettings();
   renderHistoryOrderSettings();
   document.getElementById('setting-reminder-day').value = STATE.settings.reminderDay || 25;
@@ -1049,7 +1106,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.7.2';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });

@@ -86,7 +86,7 @@
             <h3 style="margin:0;">資産配分</h3>
             <div class="history-year-nav pie-month-nav">
               <button type="button" id="home-pie-prev" aria-label="前の月">‹</button>
-              <label class="pie-month-picker"><span id="home-breakdown-month">-</span><span class="caret">▾</span><input type="month" id="home-pie-month-input" aria-label="表示する年月"></label>
+              <button type="button" class="pie-month-picker" id="home-pie-month-btn"><span id="home-breakdown-month">-</span><span class="caret">▾</span></button>
               <button type="button" id="home-pie-next" aria-label="次の月">›</button>
             </div>
           </div>
@@ -103,7 +103,7 @@
           <div class="label" id="record-month-label">-</div>
           <button id="record-next-month">›</button>
         </div>
-        <div id="record-empty" class="empty-state hidden">口座がまだ登録されていません。「口座」タブから追加してください。</div>
+        <div id="record-empty" class="empty-state hidden">口座がまだ登録されていません。「設定」タブの口座管理から追加してください。</div>
         <div id="record-groups"></div>
         <div class="record-actions">
           <button class="btn hidden" id="btn-save-record">この月の記録を保存</button>
@@ -134,12 +134,12 @@
         </div>
       </div>
 
-      <div id="view-accounts" class="view hidden">
-        <button class="btn" id="btn-add-account" style="margin-bottom:14px;">＋ 口座を追加</button>
-        <div id="accounts-list"></div>
-      </div>
-
       <div id="view-settings" class="view hidden">
+        <div class="card accounts-card">
+          <h3>口座管理</h3>
+          <div id="accounts-list"></div>
+          <button class="btn secondary small" id="btn-add-account" style="margin-top:6px;">＋ 口座を追加</button>
+        </div>
         <div class="card">
           <h3>カテゴリ管理</h3>
           <div id="categories-list"></div>
@@ -187,9 +187,8 @@
 
     <div class="tabbar">
       <button data-view="home" class="active"><span class="ico">🏠</span>ホーム</button>
-      <button data-view="record"><span class="ico">✏️</span>記録</button>
       <button data-view="history"><span class="ico">📈</span>履歴</button>
-      <button data-view="accounts"><span class="ico">🏦</span>口座</button>
+      <button data-view="record"><span class="ico">✏️</span>記録</button>
       <button data-view="settings"><span class="ico">⚙️</span>設定</button>
     </div>
   </div>
