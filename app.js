@@ -1023,7 +1023,8 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
+document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function checkAppVersion() {
   document.getElementById('version-current').textContent = `v${APP_VERSION}`;
   const el = document.getElementById('version-status');
