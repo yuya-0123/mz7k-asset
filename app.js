@@ -1032,74 +1032,137 @@ function openAccountModal(existing) {
 }
 
 // ---------- 元本のまとめて入力 ----------
-// 「2024/01 100000」のような行を読み取る。年月は 2024/01・2024-1・2024年1月 など、金額のカンマや「円」もOK
+// 「2024/01 100000」または「2024/01 100000 101557」(元本 評価額)の行を読み取る。
+// 年月は 2024/01・2024-1・2024年1月 など、金額のカンマや「円」、全角数字もOK
 function parseBulkPrincipal(text) {
   const items = [], errors = [];
   const seen = new Map();
+  const num = (s) => Number(s.replace(/[,，円]/g, ''));
   text.split(/\r?\n/).forEach((raw) => {
-    const line = raw.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[／]/g, '/').trim();
+    const line = raw.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[／]/g, '/').replace(/　/g, ' ').trim();
     if (!line) return;
-    const m = line.match(/^(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*月?[\s,:：\t]+([\d,，]+)\s*円?$/);
+    const m = line.match(/^(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*月?[\s,:：]+([\d,，]+)\s*円?(?:[\s\/]+([\d,，]+)\s*円?)?$/);
     if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) { errors.push(raw.trim()); return; }
     const ym = `${m[1]}-${pad2(Number(m[2]))}`;
-    const value = Number(m[3].replace(/[,，]/g, ''));
-    if (seen.has(ym)) items[seen.get(ym)].value = value;
-    else { seen.set(ym, items.length); items.push({ ym, value }); }
+    const item = { ym, value: num(m[3]), balance: m[4] !== undefined ? num(m[4]) : null };
+    if (seen.has(ym)) items[seen.get(ym)] = item;
+    else { seen.set(ym, items.length); items.push(item); }
   });
   items.sort((a, b) => (a.ym < b.ym ? -1 : 1));
   return { items, errors };
 }
 
+// 入力内容と今のデータから、保存する内容(プレビュー)を組み立てる。STATEはまだ変えない
+function planBulkPrincipal(acc, items, mergedId, restId) {
+  const findRec = (id, ym) => STATE.records.find((r) => r.accountId === id && r.yearMonth === ym);
+  const rows = [], skipped = [], warnings = [];
+  items.forEach(({ ym, value, balance }) => {
+    const rec = findRec(acc.id, ym);
+    if (rec) {
+      rows.push({ ym, kind: 'update', rec, value, balance: rec.balance, before: typeof rec.principal === 'number' ? rec.principal : null });
+      return;
+    }
+    if (balance === null) { skipped.push(ym); return; }
+    const row = { ym, kind: 'create', value, balance, before: null };
+    const merged = mergedId ? findRec(mergedId, ym) : null;
+    if (merged) {
+      const rest = merged.balance - balance;
+      if (!restId) { warnings.push(`${ymLabelFull(ym)}: 合算の記録があるので、分ける先の口座を選ぶまで追加しません`); return; }
+      if (findRec(restId, ym)) { warnings.push(`${ymLabelFull(ym)}: 分ける先の口座にもう記録があるのでスキップ`); return; }
+      if (rest < 0) { warnings.push(`${ymLabelFull(ym)}: 合算(${Charts.formatYen(merged.balance)})より評価額が大きいのでスキップ`); return; }
+      row.split = { merged, rest };
+      if (typeof merged.principal === 'number') row.split.restPrincipal = Math.max(0, merged.principal - value);
+    }
+    if (!mergedId) {
+      const hiddenHit = STATE.accounts.filter((a) => a.id !== acc.id && a.hideInRecord && findRec(a.id, ym));
+      hiddenHit.forEach((a) => { if (!warnings.includes(a.name)) warnings.push(a.name); });
+    }
+    rows.push(row);
+  });
+  // 非表示の口座(合算など)にも記録がある月を追加すると二重に数えるので注意を出す
+  const hiddenNames = mergedId ? [] : warnings.splice(0);
+  if (hiddenNames.length) warnings.push(`追加する月に「${hiddenNames.map(escapeHtml).join('」「')}」の記録もあります。合算の記録なら二重に数えないよう、上の「合算口座から分ける」を使ってください`);
+  return { rows, skipped, warnings };
+}
+
+function applyBulkPrincipal(acc, plan, restId) {
+  const now = new Date().toISOString();
+  plan.rows.forEach((row) => {
+    if (row.kind === 'update') { row.rec.principal = row.value; return; }
+    STATE.records.push({ yearMonth: row.ym, accountId: acc.id, balance: row.balance, principal: row.value, recordedAt: now });
+    if (row.split) {
+      const restRec = { yearMonth: row.ym, accountId: restId, balance: row.split.rest, recordedAt: now };
+      if (typeof row.split.restPrincipal === 'number') restRec.principal = row.split.restPrincipal;
+      STATE.records.push(restRec);
+      STATE.records = STATE.records.filter((r) => r !== row.split.merged);
+    }
+  });
+}
+
 function openBulkPrincipalModal(acc) {
+  const others = STATE.accounts.filter((a) => a.id !== acc.id);
+  const opts = (ph) => `<option value="">${ph}</option>` + others.map((a) => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
   openModal(`
     <h3>元本をまとめて入力</h3>
-    <p class="bulk-help">「${escapeHtml(acc.name)}」の各月の元本を1行に1か月ずつ貼り付けてください。<br>例: <code>2024/01 100000</code><br>評価額は変わりません。評価額を記録していない月はスキップします。</p>
+    <p class="bulk-help">「${escapeHtml(acc.name)}」の各月の元本を1行に1か月ずつ貼り付けてください。<br>例: <code>2024/01 100000</code><br>評価額も並べると(<code>2024/01 100000 101557</code>)、記録がない月も追加できます。記録がある月は元本だけ書き換え、評価額は変えません。</p>
     <div class="field">
-      <textarea id="bulk-principal-text" class="bulk-textarea" rows="8" placeholder="2024/01 100000&#10;2024/02 200000"></textarea>
+      <textarea id="bulk-principal-text" class="bulk-textarea" rows="8" placeholder="2024/01 100000 101557&#10;2024/02 200000 210094"></textarea>
     </div>
+    <details class="bulk-split" id="bulk-split">
+      <summary>合算口座から分ける（任意）</summary>
+      <p class="bulk-help">昔の記録を複数の口座の合計でまとめていた場合に使います。新しく追加する月は「合算 − この口座の評価額」を分ける先の口座に入れて、その月の合算の記録は消します(合計は変わりません)。</p>
+      <div class="field"><label>合算の口座</label><select id="bulk-merged">${opts('使わない')}</select></div>
+      <div class="field"><label>差額を入れる口座</label><select id="bulk-rest">${opts('選択してください')}</select></div>
+    </details>
     <div id="bulk-principal-preview"></div>
     <button class="btn" id="bulk-principal-check" style="margin-bottom:10px;">確認する</button>
     <button class="btn secondary" id="bulk-principal-cancel">キャンセル</button>
   `);
   const textEl = document.getElementById('bulk-principal-text');
+  const mergedEl = document.getElementById('bulk-merged');
+  const restEl = document.getElementById('bulk-rest');
   const preview = document.getElementById('bulk-principal-preview');
   const checkBtn = document.getElementById('bulk-principal-check');
   let ready = null;
-  textEl.addEventListener('input', () => { ready = null; preview.innerHTML = ''; checkBtn.textContent = '確認する'; });
+  const reset = () => { ready = null; preview.innerHTML = ''; checkBtn.textContent = '確認する'; };
+  [textEl, mergedEl, restEl].forEach((el) => { el.addEventListener('input', reset); el.addEventListener('change', reset); });
   document.getElementById('bulk-principal-cancel').addEventListener('click', () => openAccountModal(acc));
   checkBtn.addEventListener('click', async () => {
     if (ready) {
-      ready.forEach(({ rec, value }) => { rec.principal = value; });
+      applyBulkPrincipal(acc, ready, restEl.value);
       await persist();
-      showToast(`${ready.length}か月分の元本を保存しました`);
+      showToast(`${ready.rows.length}か月分を保存しました`);
       closeModal();
       renderAccounts();
       return;
     }
     const { items, errors } = parseBulkPrincipal(textEl.value);
+    const mergedId = mergedEl.value || null;
+    const restId = mergedId ? (restEl.value || null) : null;
+    if (mergedId && restId === mergedId) { preview.innerHTML = '<div class="bulk-warn">合算の口座と差額を入れる口座は別の口座を選んでください</div>'; return; }
+    const plan = planBulkPrincipal(acc, items, mergedId, restId);
     const fmt = (v) => Charts.formatYen(v);
-    const rows = [];
-    const apply = [];
-    const skipped = [];
-    items.forEach(({ ym, value }) => {
-      const rec = STATE.records.find((r) => r.accountId === acc.id && r.yearMonth === ym);
-      if (!rec) { skipped.push(ym); return; }
-      apply.push({ rec, value });
-      const before = typeof rec.principal === 'number' ? rec.principal : null;
-      const changed = before !== value;
-      rows.push(`<tr class="${changed ? 'changed' : ''}"><td>${ymLabelFull(ym)}</td><td>${before === null ? '—' : fmt(before)}</td><td>${fmt(value)}</td></tr>`);
-    });
+    const restName = restId ? escapeHtml(STATE.accounts.find((a) => a.id === restId).name) : '';
+    const hasSplit = plan.rows.some((r) => r.split);
     let html = '';
-    if (apply.length) {
-      const changedCount = apply.filter(({ rec, value }) => rec.principal !== value).length;
-      html += `<div class="bulk-summary">${apply.length}か月分を入れます（変わるのは${changedCount}か月）</div>`;
-      html += `<div class="bulk-table-wrap"><table class="bulk-table"><thead><tr><th>月</th><th>今の元本</th><th>新しい元本</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+    if (plan.rows.length) {
+      const created = plan.rows.filter((r) => r.kind === 'create').length;
+      const changed = plan.rows.filter((r) => r.kind === 'update' && r.before !== r.value).length;
+      html += `<div class="bulk-summary">${plan.rows.length}か月分（追加 ${created}・元本の変更 ${changed}）</div>`;
+      html += `<div class="bulk-table-wrap"><table class="bulk-table"><thead><tr><th>月</th><th>元本</th><th>評価額</th>${hasSplit ? `<th>${restName}</th>` : ''}</tr></thead><tbody>`;
+      html += plan.rows.map((r) => {
+        const pr = r.kind === 'update' && r.before !== null && r.before !== r.value ? `<s>${fmt(r.before)}</s><br>${fmt(r.value)}` : fmt(r.value);
+        const prCls = r.kind === 'create' || r.before !== r.value ? 'new' : '';
+        return `<tr><td>${ymLabelFull(r.ym)}${r.kind === 'create' ? '<span class="bulk-tag">追加</span>' : ''}</td><td class="${prCls}">${pr}</td><td class="${r.kind === 'create' ? 'new' : ''}">${fmt(r.balance)}</td>${hasSplit ? `<td class="new">${r.split ? fmt(r.split.rest) : ''}</td>` : ''}</tr>`;
+      }).join('');
+      html += '</tbody></table></div>';
     }
-    if (skipped.length) html += `<div class="bulk-warn">評価額の記録がないのでスキップ: ${skipped.map(ymLabelFull).join('、')}</div>`;
+    if (plan.skipped.length) html += `<div class="bulk-warn">評価額の記録がないのでスキップ（評価額も並べると追加できます）: ${plan.skipped.map(ymLabelFull).join('、')}</div>`;
+    plan.warnings.forEach((w) => { html += `<div class="bulk-warn">${w}</div>`; });
     if (errors.length) html += `<div class="bulk-warn">読み取れなかった行: ${errors.map(escapeHtml).join('、')}</div>`;
     if (!items.length && !errors.length) html = '<div class="bulk-warn">入力がありません</div>';
     preview.innerHTML = html;
-    if (apply.length) { ready = apply; checkBtn.textContent = `${apply.length}か月分を保存`; }
+    if (plan.rows.length) { ready = plan; checkBtn.textContent = `${plan.rows.length}か月分を保存`; }
   });
 }
 
@@ -1411,7 +1474,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });

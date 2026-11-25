@@ -294,7 +294,13 @@ body.amounts-masked #record-groups input:not(:focus) { -webkit-text-security: di
 .bulk-table th, .bulk-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .bulk-table th:first-child, .bulk-table td:first-child { text-align: left; }
 .bulk-table th { color: var(--text-dim); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
-.bulk-table tr.changed td:last-child { color: var(--accent); font-weight: 600; }
+.bulk-table td.new { color: var(--accent); font-weight: 600; }
+.bulk-table s { color: var(--text-faint); font-weight: 400; }
+.bulk-tag { display: inline-block; margin-left: 6px; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; background: var(--accent); color: #fff; vertical-align: 1px; }
+.bulk-split { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--bg); }
+.bulk-split summary { font-size: 13.5px; cursor: pointer; }
+.bulk-split .bulk-help { margin-top: 8px; }
+.bulk-split .field select { background: var(--bg-elevated); }
 .bulk-warn { color: #f0a500; font-size: 12.5px; line-height: 1.6; margin-bottom: 10px; }
 
 /* NISAの残り枠 */
