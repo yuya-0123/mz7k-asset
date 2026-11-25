@@ -1173,8 +1173,8 @@ function openBulkPrincipalModal(acc) {
 }
 
 // ---------- 新NISAの残り枠 ----------
-// 年間: つみたて120万・成長240万。生涯: 合計1800万(うち成長は1200万まで)。売却での枠の復活は考えない
-const NISA_LIMITS = { tsumitateYear: 1200000, growthYear: 2400000, lifetime: 18000000, growthLifetime: 12000000 };
+// 年間: つみたて120万・成長240万。生涯: つみたて600万・成長1200万(合計1800万)。売却での枠の復活は考えない
+const NISA_LIMITS = { tsumitateYear: 1200000, growthYear: 2400000, lifetime: 18000000, growthLifetime: 12000000, tsumitateLifetime: 6000000 };
 const NISA_START_YEAR = 2024;
 function nisaAutoSettings() {
   return Object.assign({ enabled: false, accountId: '', monthly: 100000, fromYear: new Date().getFullYear() }, STATE.settings.nisaAuto || {});
@@ -1225,6 +1225,7 @@ function nisaSummary(year) {
     tsuYearLeft: Math.max(0, NISA_LIMITS.tsumitateYear - (cur.tsumitate || 0)),
     groYearLeft: Math.max(0, NISA_LIMITS.growthYear - (cur.growth || 0)),
     lifeUsed: tsuTotal + groTotal, lifeLeft,
+    tsuLifeUsed: tsuTotal, tsuLifeLeft: Math.max(0, NISA_LIMITS.tsumitateLifetime - tsuTotal),
     groLifeUsed: groTotal, groLifeLeft: Math.min(lifeLeft, Math.max(0, NISA_LIMITS.growthLifetime - groTotal)),
   };
 }
@@ -1250,9 +1251,8 @@ function renderHistoryNisa() {
     </div>
     <div class="card">
       <h3>生涯投資枠</h3>
-      ${nisaBar('つみたて投資枠', s.lifeUsed, NISA_LIMITS.lifetime, s.lifeLeft, `つみたて ${yenShort(s.lifeUsed - s.groLifeUsed)} + 成長 ${yenShort(s.groLifeUsed)} / ${Charts.formatYenShort(NISA_LIMITS.lifetime)}`)}
+      ${nisaBar('つみたて投資枠', s.tsuLifeUsed, NISA_LIMITS.tsumitateLifetime, s.tsuLifeLeft)}
       ${nisaBar('成長投資枠', s.groLifeUsed, NISA_LIMITS.growthLifetime, s.groLifeLeft)}
-      <div class="nisa-note">つみたて投資枠は生涯枠1,800万円をすべて使えるので、成長投資枠で使った分も差し引いています。</div>
     </div>
     <div class="nisa-note" style="text-align:center;">利用額の入力・自動計算の設定は 設定 →「NISAの利用額」から</div>`;
 }
@@ -1561,7 +1561,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.13.0';
+const APP_VERSION = '1.13.1';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
