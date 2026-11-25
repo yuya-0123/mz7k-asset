@@ -248,7 +248,7 @@ function switchView(view) {
   document.getElementById('view-' + view).classList.remove('hidden');
   document.querySelectorAll('.tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   document.getElementById('topbar-title').textContent = VIEW_TITLES[view];
-  document.querySelector('.content').classList.toggle('no-scroll', view === 'home' || view === 'history');
+  document.querySelector('.content').classList.toggle('no-scroll', view === 'home' || view === 'history' || view === 'record');
   if (view === 'home') renderHome();
   if (view === 'record') { recordViewYm = recordViewYm || todayYm(); renderRecordView(); }
   if (view === 'history') renderHistory();
@@ -989,20 +989,9 @@ document.getElementById('import-file-input').addEventListener('change', async (e
   }
 });
 
-// ---------- ホーム画面アプリの下の隙間対策 ----------
-// iOSのホーム画面アプリでは表示領域が画面より短く伝わり、下に隙間ができることがある。
-// その場合はタブバーの下余白を詰める(隙間はhtmlの背景=タブバーと同じ色で塗られる)。
-function detectBottomGap() {
-  const standalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
-  const gap = standalone ? window.screen.height - window.innerHeight : 0;
-  document.documentElement.classList.toggle('has-bottom-gap', gap > 20);
-}
-detectBottomGap();
-window.addEventListener('resize', detectBottomGap);
-
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.6.4';
+const APP_VERSION = '1.6.5';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function checkAppVersion() {
   document.getElementById('version-current').textContent = `v${APP_VERSION}`;
