@@ -906,6 +906,7 @@ function renderHistoryOrderSettings() {
 
 // ---------- 設定画面 ----------
 async function renderSettings() {
+  checkAppVersion();
   renderCategoriesSettings();
   renderHistoryOrderSettings();
   document.getElementById('setting-reminder-day').value = STATE.settings.reminderDay || 25;
@@ -1025,6 +1026,30 @@ document.getElementById('import-file-input').addEventListener('change', async (e
     showToast('バックアップファイルが不正です');
   }
 });
+
+// ---------- バージョン確認 ----------
+// 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
+const APP_VERSION = '1.6.0';
+async function checkAppVersion() {
+  document.getElementById('version-current').textContent = `v${APP_VERSION}`;
+  const el = document.getElementById('version-status');
+  el.className = 'version-status';
+  el.textContent = '確認中…';
+  try {
+    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('bad status');
+    const latest = (await res.json()).version;
+    if (latest === APP_VERSION) {
+      el.textContent = '✓ 最新版です';
+      el.className = 'version-status ok';
+    } else {
+      el.textContent = `新しいバージョン v${latest} があります。下のボタンで更新してください。`;
+      el.className = 'version-status old';
+    }
+  } catch (e) {
+    el.textContent = 'オフラインのため最新版か確認できませんでした';
+  }
+}
 
 document.getElementById('btn-force-update').addEventListener('click', async () => {
   const ok = await confirmDialog('最新版に更新しますか？', 'アプリの表示・機能だけを最新の状態に更新します。口座データや記録、PINなどは一切削除されません。', '更新する', false);

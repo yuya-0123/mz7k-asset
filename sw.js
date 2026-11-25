@@ -1,4 +1,4 @@
-const CACHE_NAME = 'asset-tracker-v7';
+const CACHE_NAME = 'asset-tracker-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -27,6 +27,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (new URL(event.request.url).pathname.endsWith('/version.json')) return; // バージョン確認は常にネットワークから
   event.respondWith(
     fetch(event.request)
       .then((res) => {
