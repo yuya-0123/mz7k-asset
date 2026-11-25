@@ -235,3 +235,13 @@ canvas.chart.tall { height: 220px; }
   }
   body { height: 100%; }
 }
+/* 記録タブ: 画面に収め、口座が増えたら入力欄の部分だけスクロール。カードと行を詰める */
+.content.no-scroll #view-record .month-nav { flex-shrink: 0; }
+.content.no-scroll #view-record #record-groups { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+#record-groups .card { padding: 10px 14px; margin-bottom: 8px; }
+#record-groups .card h3 { margin-bottom: 2px; font-size: 12.5px; }
+#record-groups .amount-row { padding: 7px 0; }
+#record-groups .amount-row input { padding: 7px 10px; }
+.record-actions { display: flex; gap: 8px; margin-top: 8px; flex-shrink: 0; }
+.record-actions #btn-save-record { flex: 1; }
+.record-actions #btn-delete-month { width: auto; padding: 13px 16px; }

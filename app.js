@@ -248,7 +248,7 @@ function switchView(view) {
   document.getElementById('view-' + view).classList.remove('hidden');
   document.querySelectorAll('.tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   document.getElementById('topbar-title').textContent = VIEW_TITLES[view];
-  document.querySelector('.content').classList.toggle('no-scroll', view === 'home' || view === 'history');
+  document.querySelector('.content').classList.toggle('no-scroll', view === 'home' || view === 'history' || view === 'record');
   if (view === 'home') renderHome();
   if (view === 'record') { recordViewYm = recordViewYm || todayYm(); renderRecordView(); }
   if (view === 'history') renderHistory();
