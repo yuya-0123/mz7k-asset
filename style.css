@@ -245,3 +245,6 @@ canvas.chart.tall { height: 220px; }
 .record-actions { display: flex; gap: 8px; margin-top: 8px; flex-shrink: 0; }
 .record-actions #btn-save-record { flex: 1; }
 .record-actions #btn-delete-month { width: auto; padding: 13px 16px; }
+.pie-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.pie-month-nav { font-size: 14px; }
+.pie-month-nav button { font-size: 20px; }
