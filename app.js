@@ -991,7 +991,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.6.3';
+const APP_VERSION = '1.6.4';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function checkAppVersion() {
   document.getElementById('version-current').textContent = `v${APP_VERSION}`;

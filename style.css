@@ -25,14 +25,17 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
-  /* iOSのホーム画面アプリ(black-translucent)では height:100% だとステータスバー分だけ下が足りなくなるため 100vh を使う */
-  height: 100vh;
+  height: 100%;
   position: fixed;
   inset: 0;
   width: 100%;
   overflow: hidden;
 }
 body { display: flex; flex-direction: column; }
+/* iOSのホーム画面アプリでは画面の高さが実際より短く計算され、下に隙間が出ることがある(100vhにするとタブが切れた)。
+   隙間に見えるのは html の背景なので、タブバーと同じ色にして隙間をタブバーの延長に見せる。 */
+html { background: var(--bg-elevated); }
+body { background: var(--bg); }
 
 button, input, select { font-family: inherit; }
 button { -webkit-appearance: none; appearance: none; }
