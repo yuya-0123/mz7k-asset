@@ -976,6 +976,7 @@ function openAccountModal(existing) {
       <div class="switch ${existing && existing.hideInRecord ? 'on' : ''}" id="acc-hide-switch"></div>
     </div>
     <button class="btn" id="acc-save" style="margin-bottom:10px;">保存</button>
+    ${isEdit && existing.trackPrincipal ? '<button class="btn secondary" id="acc-bulk-principal" style="margin-bottom:10px;">元本をまとめて入力</button>' : ''}
     ${isEdit ? '<button class="btn danger" id="acc-delete" style="margin-bottom:10px;">この口座を削除</button>' : ''}
     <button class="btn secondary" id="acc-cancel">キャンセル</button>
   `);
@@ -1014,6 +1015,8 @@ function openAccountModal(existing) {
     closeModal();
     renderAccounts();
   });
+  const bulkBtn = document.getElementById('acc-bulk-principal');
+  if (bulkBtn) bulkBtn.addEventListener('click', () => openBulkPrincipalModal(existing));
   if (isEdit) {
     document.getElementById('acc-delete').addEventListener('click', async () => {
       const ok = await confirmDialog('口座を削除しますか？', `「${escapeHtml(existing.name)}」に紐づく過去の記録もすべて削除されます。この操作は取り消せません。`, '削除する');
@@ -1024,6 +1027,78 @@ function openAccountModal(existing) {
       renderAccounts();
     });
   }
+}
+
+// ---------- 元本のまとめて入力 ----------
+// 「2024/01 100000」のような行を読み取る。年月は 2024/01・2024-1・2024年1月 など、金額のカンマや「円」もOK
+function parseBulkPrincipal(text) {
+  const items = [], errors = [];
+  const seen = new Map();
+  text.split(/\r?\n/).forEach((raw) => {
+    const line = raw.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[／]/g, '/').trim();
+    if (!line) return;
+    const m = line.match(/^(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*月?[\s,:：\t]+([\d,，]+)\s*円?$/);
+    if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) { errors.push(raw.trim()); return; }
+    const ym = `${m[1]}-${pad2(Number(m[2]))}`;
+    const value = Number(m[3].replace(/[,，]/g, ''));
+    if (seen.has(ym)) items[seen.get(ym)].value = value;
+    else { seen.set(ym, items.length); items.push({ ym, value }); }
+  });
+  items.sort((a, b) => (a.ym < b.ym ? -1 : 1));
+  return { items, errors };
+}
+
+function openBulkPrincipalModal(acc) {
+  openModal(`
+    <h3>元本をまとめて入力</h3>
+    <p class="bulk-help">「${escapeHtml(acc.name)}」の各月の元本を1行に1か月ずつ貼り付けてください。<br>例: <code>2024/01 100000</code><br>評価額は変わりません。評価額を記録していない月はスキップします。</p>
+    <div class="field">
+      <textarea id="bulk-principal-text" class="bulk-textarea" rows="8" placeholder="2024/01 100000&#10;2024/02 200000"></textarea>
+    </div>
+    <div id="bulk-principal-preview"></div>
+    <button class="btn" id="bulk-principal-check" style="margin-bottom:10px;">確認する</button>
+    <button class="btn secondary" id="bulk-principal-cancel">キャンセル</button>
+  `);
+  const textEl = document.getElementById('bulk-principal-text');
+  const preview = document.getElementById('bulk-principal-preview');
+  const checkBtn = document.getElementById('bulk-principal-check');
+  let ready = null;
+  textEl.addEventListener('input', () => { ready = null; preview.innerHTML = ''; checkBtn.textContent = '確認する'; });
+  document.getElementById('bulk-principal-cancel').addEventListener('click', () => openAccountModal(acc));
+  checkBtn.addEventListener('click', async () => {
+    if (ready) {
+      ready.forEach(({ rec, value }) => { rec.principal = value; });
+      await persist();
+      showToast(`${ready.length}か月分の元本を保存しました`);
+      closeModal();
+      renderAccounts();
+      return;
+    }
+    const { items, errors } = parseBulkPrincipal(textEl.value);
+    const fmt = (v) => Charts.formatYen(v);
+    const rows = [];
+    const apply = [];
+    const skipped = [];
+    items.forEach(({ ym, value }) => {
+      const rec = STATE.records.find((r) => r.accountId === acc.id && r.yearMonth === ym);
+      if (!rec) { skipped.push(ym); return; }
+      apply.push({ rec, value });
+      const before = typeof rec.principal === 'number' ? rec.principal : null;
+      const changed = before !== value;
+      rows.push(`<tr class="${changed ? 'changed' : ''}"><td>${ymLabelFull(ym)}</td><td>${before === null ? '—' : fmt(before)}</td><td>${fmt(value)}</td></tr>`);
+    });
+    let html = '';
+    if (apply.length) {
+      const changedCount = apply.filter(({ rec, value }) => rec.principal !== value).length;
+      html += `<div class="bulk-summary">${apply.length}か月分を入れます（変わるのは${changedCount}か月）</div>`;
+      html += `<div class="bulk-table-wrap"><table class="bulk-table"><thead><tr><th>月</th><th>今の元本</th><th>新しい元本</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+    }
+    if (skipped.length) html += `<div class="bulk-warn">評価額の記録がないのでスキップ: ${skipped.map(ymLabelFull).join('、')}</div>`;
+    if (errors.length) html += `<div class="bulk-warn">読み取れなかった行: ${errors.map(escapeHtml).join('、')}</div>`;
+    if (!items.length && !errors.length) html = '<div class="bulk-warn">入力がありません</div>';
+    preview.innerHTML = html;
+    if (apply.length) { ready = apply; checkBtn.textContent = `${apply.length}か月分を保存`; }
+  });
 }
 
 // ---------- カテゴリ管理 ----------
@@ -1253,7 +1328,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.9.0';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });

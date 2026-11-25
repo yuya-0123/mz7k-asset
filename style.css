@@ -282,3 +282,17 @@ body.amounts-masked #record-groups input:not(:focus) { -webkit-text-security: di
 .list-row .meta.principal-meta > span { white-space: nowrap; }
 .toggle-row.sub-toggle { padding-left: 14px; border-left: 2px solid var(--border, rgba(128,128,128,.3)); margin-left: 4px; }
 #record-groups .principal-row .label small { font-size: 11px; margin-left: 2px; }
+
+/* 元本のまとめて入力 */
+.bulk-help { color: var(--text-dim); font-size: 13px; line-height: 1.6; margin: 0 0 12px; }
+.bulk-help code { background: var(--bg); padding: 1px 6px; border-radius: 6px; }
+.bulk-textarea { width: 100%; box-sizing: border-box; background: var(--bg); color: var(--text); border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 12px; padding: 12px; font-size: 16px; font-family: ui-monospace, Menlo, monospace; resize: vertical; }
+.bulk-textarea:focus { outline: 2px solid var(--accent); }
+.bulk-summary { font-size: 14px; font-weight: 600; margin: 4px 0 8px; }
+.bulk-table-wrap { max-height: 240px; overflow-y: auto; margin-bottom: 12px; border-radius: 10px; background: var(--bg); }
+.bulk-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.bulk-table th, .bulk-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.bulk-table th:first-child, .bulk-table td:first-child { text-align: left; }
+.bulk-table th { color: var(--text-dim); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
+.bulk-table tr.changed td:last-child { color: var(--accent); font-weight: 600; }
+.bulk-warn { color: #f0a500; font-size: 12.5px; line-height: 1.6; margin-bottom: 10px; }
