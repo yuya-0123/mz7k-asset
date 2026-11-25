@@ -251,6 +251,7 @@ canvas.chart.tall { height: 220px; }
 .pie-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .pie-month-nav { font-size: 14px; }
 .pie-month-nav button { font-size: 20px; }
-.pie-month-selects { display: inline-flex; align-items: center; gap: 2px; }
-.pie-month-selects select { -webkit-appearance: none; appearance: none; background: var(--bg); border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 8px; color: var(--text); font: inherit; font-size: 14px; font-weight: 700; padding: 4px 8px; text-align: center; text-align-last: center; cursor: pointer; }
-.pie-month-selects select:disabled { opacity: 0.5; }
+.pie-month-picker { position: relative; display: inline-flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.pie-month-picker .caret { font-size: 10px; color: var(--text-faint); }
+/* 透明な月入力を上に重ねて、タップでiPhoneの年・月ホイールを出す */
+.pie-month-picker input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: none; padding: 0; margin: 0; font-size: 16px; cursor: pointer; -webkit-appearance: none; appearance: none; }
