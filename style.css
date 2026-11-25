@@ -280,3 +280,5 @@ body.amounts-masked #record-groups input:not(:focus) { -webkit-text-security: di
 .principal-sub .down { color: var(--danger); }
 .list-row .meta.principal-meta { display: flex; flex-wrap: wrap; gap: 0 10px; }
 .list-row .meta.principal-meta > span { white-space: nowrap; }
+.toggle-row.sub-toggle { padding-left: 14px; border-left: 2px solid var(--border, rgba(128,128,128,.3)); margin-left: 4px; }
+#record-groups .principal-row .label small { font-size: 11px; margin-left: 2px; }
