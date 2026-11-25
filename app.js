@@ -417,16 +417,15 @@ function shiftHomePie(dir) {
 }
 document.getElementById('home-pie-prev').addEventListener('click', () => shiftHomePie(-1));
 document.getElementById('home-pie-next').addEventListener('click', () => shiftHomePie(1));
-// 年を選んだら、同じ月があればその月、なければその年の最新の記録月を表示
-document.getElementById('home-pie-year').addEventListener('change', (e) => {
-  const y = e.target.value;
-  const ms = recordedMonths().filter((m) => m.slice(0, 4) === y);
-  if (ms.length === 0) return;
-  const same = `${y}-${homePieYm ? homePieYm.slice(5, 7) : ''}`;
-  homePieYm = ms.includes(same) ? same : ms[ms.length - 1];
+// 年月ホイールで選んだ月を表示。記録がない月を選んだら、いちばん近い記録月にする
+document.getElementById('home-pie-month-input').addEventListener('change', (e) => {
+  const v = e.target.value;
+  const months = recordedMonths();
+  if (!/^\d{4}-\d{2}$/.test(v) || months.length === 0) { renderHomePie(); return; }
+  const idx = (ym) => Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7));
+  homePieYm = months.reduce((best, m) => (Math.abs(idx(m) - idx(v)) < Math.abs(idx(best) - idx(v)) ? m : best), months[0]);
   renderHomePie();
 });
-document.getElementById('home-pie-month').addEventListener('change', (e) => { homePieYm = e.target.value; renderHomePie(); });
 function renderHomePie() {
   const hidden = !!STATE.settings.hideAmounts;
   const months = recordedMonths();
@@ -434,16 +433,12 @@ function renderHomePie() {
   const i = months.indexOf(homePieYm);
   document.getElementById('home-pie-prev').disabled = i <= 0;
   document.getElementById('home-pie-next').disabled = i < 0 || i >= months.length - 1;
-  // 年・月のプルダウン（記録がある年・月だけ）
-  const yearSel = document.getElementById('home-pie-year');
-  const monthSel = document.getElementById('home-pie-month');
-  const years = [...new Set(months.map((m) => m.slice(0, 4)))].reverse();
-  const curY = homePieYm ? homePieYm.slice(0, 4) : null;
-  yearSel.innerHTML = years.length ? years.map((y) => `<option value="${y}"${y === curY ? ' selected' : ''}>${y}年</option>`).join('') : '<option>-</option>';
-  const yMonths = months.filter((m) => m.slice(0, 4) === curY).reverse();
-  monthSel.innerHTML = yMonths.length ? yMonths.map((m) => `<option value="${m}"${m === homePieYm ? ' selected' : ''}>${Number(m.slice(5, 7))}月</option>`).join('') : '<option>-</option>';
-  yearSel.disabled = years.length <= 1;
-  monthSel.disabled = yMonths.length <= 1;
+  document.getElementById('home-breakdown-month').textContent = homePieYm ? ymLabelFull(homePieYm) : '-';
+  const monthInput = document.getElementById('home-pie-month-input');
+  monthInput.value = homePieYm || '';
+  monthInput.min = months[0] || '';
+  monthInput.max = months[months.length - 1] || '';
+  monthInput.disabled = months.length <= 1;
   const breakdown = homePieYm ? breakdownForMonth(homePieYm) : [];
   Charts.drawPieChart(document.getElementById('home-pie-chart'), breakdown, hidden);
   const legendEl = document.getElementById('home-pie-legend');
@@ -1054,7 +1049,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.1';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
