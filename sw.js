@@ -1,5 +1,5 @@
 // キャッシュ名はアプリを更新するたびに上げる（古いファイルが残らないように）
-const CACHE_NAME = 'asset-tracker-v25';
+const CACHE_NAME = 'asset-tracker-v26';
 const ASSETS = [
   './',
   './index.html',
