@@ -316,3 +316,9 @@ body.amounts-masked #record-groups input:not(:focus) { -webkit-text-security: di
 .nisa-input-row { display: flex; gap: 10px; }
 .nisa-input-row label { flex: 1; font-size: 12px; color: var(--text-dim); }
 .nisa-input-row input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px; }
+
+.nisa-auto-tag { display: inline-block; margin-left: 6px; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; background: var(--accent); color: #fff; font-weight: 500; vertical-align: 1px; }
+.nisa-auto-fields { padding: 10px 12px 2px; border-radius: 12px; background: var(--bg); margin-bottom: 4px; }
+.nisa-auto-fields .field select, .nisa-input-row select { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text); font-size: 16px; }
+.nisa-auto-fields .nisa-input-row { margin-bottom: 10px; }
+.nisa-input-row input:disabled { opacity: 0.75; color: var(--accent); }

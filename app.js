@@ -1170,7 +1170,38 @@ function openBulkPrincipalModal(acc) {
 // 年間: つみたて120万・成長240万。生涯: 合計1800万(うち成長は1200万まで)。売却での枠の復活は考えない
 const NISA_LIMITS = { tsumitateYear: 1200000, growthYear: 2400000, lifetime: 18000000, growthLifetime: 12000000 };
 const NISA_START_YEAR = 2024;
-function nisaUsage() { return STATE.settings.nisaUsage || {}; }
+function nisaAutoSettings() {
+  return Object.assign({ enabled: false, accountId: '', monthly: 100000, fromYear: new Date().getFullYear() }, STATE.settings.nisaAuto || {});
+}
+// 自動計算: 口座の元本が前の記録から増えた分を、その月の買付とみなす。
+// 毎月まず「つみたての月額」までをつみたて枠、残りを成長投資枠に入れる(元本が減った月は0)
+function nisaAutoForYear(year, auto) {
+  const recs = STATE.records
+    .filter((r) => r.accountId === auto.accountId && typeof r.principal === 'number')
+    .sort((a, b) => (a.yearMonth < b.yearMonth ? -1 : 1));
+  let tsumitate = 0, growth = 0, prev = null;
+  recs.forEach((r) => {
+    const delta = r.principal - (prev === null ? 0 : prev);
+    prev = r.principal;
+    if (Number(r.yearMonth.slice(0, 4)) !== year || delta <= 0) return;
+    const t = Math.min(auto.monthly, delta);
+    tsumitate += t;
+    growth += delta - t;
+  });
+  return { tsumitate, growth };
+}
+function isNisaAutoYear(year, auto) { return auto.enabled && auto.accountId && year >= auto.fromYear; }
+// 手入力の年 + 自動計算の年をあわせた、年ごとの利用額
+function nisaUsage() {
+  const manual = STATE.settings.nisaUsage || {};
+  const auto = nisaAutoSettings();
+  const out = {};
+  Object.keys(manual).forEach((y) => { if (!isNisaAutoYear(Number(y), auto)) out[y] = manual[y]; });
+  if (auto.enabled && auto.accountId) {
+    for (let y = auto.fromYear; y <= new Date().getFullYear(); y++) out[y] = nisaAutoForYear(y, auto);
+  }
+  return out;
+}
 function hasNisaUsage() { return Object.values(nisaUsage()).some((u) => (u.tsumitate || 0) > 0 || (u.growth || 0) > 0); }
 function nisaSummary(year) {
   const usage = nisaUsage();
@@ -1200,8 +1231,9 @@ function renderHomeNisa() {
   if (!hasNisaUsage()) { card.classList.add('hidden'); return; }
   const y = new Date().getFullYear();
   const s = nisaSummary(y);
+  const auto = nisaAutoSettings();
   document.getElementById('home-nisa-body').innerHTML = `
-    <div class="nisa-section">${y}年</div>
+    <div class="nisa-section">${y}年${isNisaAutoYear(y, auto) ? '<span class="nisa-auto-tag">元本から自動</span>' : ''}</div>
     ${nisaBar('つみたて投資枠', s.tsuYearUsed, NISA_LIMITS.tsumitateYear, s.tsuYearLeft)}
     ${nisaBar('成長投資枠', s.groYearUsed, NISA_LIMITS.growthYear, s.groYearLeft)}
     <div class="nisa-section">生涯</div>
@@ -1211,33 +1243,75 @@ function renderHomeNisa() {
   card.classList.remove('hidden');
 }
 function openNisaModal() {
-  const usage = nisaUsage();
+  const manual = STATE.settings.nisaUsage || {};
+  const auto = nisaAutoSettings();
   const thisYear = new Date().getFullYear();
   const years = [];
   for (let y = NISA_START_YEAR; y <= thisYear; y++) years.push(y);
+  const accs = STATE.accounts.filter((a) => a.trackPrincipal);
+  if (!auto.accountId && accs.length) auto.accountId = accs[0].id;
   openModal(`
     <h3>NISAの利用額</h3>
-    <p class="bulk-help">年ごとに、つみたて投資枠・成長投資枠で買った金額(買付額の合計)を入力してください。証券会社の「NISA枠の利用状況」の数字がそのまま使えます。ホームに残り枠が表示されます。</p>
-    ${years.map((y) => `
-      <div class="nisa-year-title">${y}年</div>
+    <div class="toggle-row" style="padding-top:0;">
+      <div class="txt"><b>元本から自動で計算</b><span>口座の元本が増えた分を買付とみなします。毎月、つみたての月額までをつみたて投資枠、残りを成長投資枠に入れます</span></div>
+      <div class="switch ${auto.enabled ? 'on' : ''}" id="nisa-auto-switch"></div>
+    </div>
+    <div id="nisa-auto-fields" class="nisa-auto-fields">
+      ${accs.length ? '' : '<div class="bulk-warn">「元本も記録する」をオンにした口座がありません</div>'}
+      <div class="field"><label>元本を使う口座</label><select id="nisa-auto-account">${accs.map((a) => `<option value="${a.id}" ${a.id === auto.accountId ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}</select></div>
       <div class="nisa-input-row">
-        <label>つみたて<input type="number" inputmode="numeric" data-nisa-year="${y}" data-nisa-kind="tsumitate" value="${usage[y] && usage[y].tsumitate ? usage[y].tsumitate : ''}" placeholder="0"></label>
-        <label>成長<input type="number" inputmode="numeric" data-nisa-year="${y}" data-nisa-kind="growth" value="${usage[y] && usage[y].growth ? usage[y].growth : ''}" placeholder="0"></label>
-      </div>`).join('')}
+        <label>つみたての月額<input type="number" inputmode="numeric" id="nisa-auto-monthly" value="${auto.monthly}"></label>
+        <label>自動にする年<select id="nisa-auto-from">${years.map((y) => `<option value="${y}" ${y === auto.fromYear ? 'selected' : ''}>${y}年から</option>`).join('')}</select></label>
+      </div>
+    </div>
+    <p class="bulk-help" style="margin-top:14px;">手入力の年は、証券会社の「NISA枠の利用状況」の買付額を入れてください。</p>
+    <div id="nisa-years"></div>
     <button class="btn" id="nisa-save" style="margin:14px 0 10px;">保存</button>
     <button class="btn secondary" id="nisa-cancel">キャンセル</button>
   `);
+  const sw = document.getElementById('nisa-auto-switch');
+  const fields = document.getElementById('nisa-auto-fields');
+  const accEl = document.getElementById('nisa-auto-account');
+  const monthlyEl = document.getElementById('nisa-auto-monthly');
+  const fromEl = document.getElementById('nisa-auto-from');
+  const yearsEl = document.getElementById('nisa-years');
+  // 手入力の値は画面上で保持して、自動の年に切り替えても消えないようにする
+  const draft = {};
+  years.forEach((y) => { draft[y] = { tsumitate: (manual[y] && manual[y].tsumitate) || 0, growth: (manual[y] && manual[y].growth) || 0 }; });
+  const readAuto = () => ({
+    enabled: sw.classList.contains('on'),
+    accountId: accEl.value || '',
+    monthly: Math.max(0, Math.round(Number(monthlyEl.value) || 0)),
+    fromYear: Number(fromEl.value),
+  });
+  const renderYears = () => {
+    const a = readAuto();
+    fields.style.display = a.enabled ? '' : 'none';
+    yearsEl.innerHTML = years.map((y) => {
+      const isAuto = isNisaAutoYear(y, a);
+      const v = isAuto ? nisaAutoForYear(y, a) : draft[y];
+      const val = (n) => (isAuto ? n : n || '');
+      return `<div class="nisa-year-title">${y}年${isAuto ? '<span class="nisa-auto-tag">自動</span>' : ''}</div>
+      <div class="nisa-input-row">
+        <label>つみたて<input type="number" inputmode="numeric" data-nisa-year="${y}" data-nisa-kind="tsumitate" value="${val(v.tsumitate)}" placeholder="0" ${isAuto ? 'disabled' : ''}></label>
+        <label>成長<input type="number" inputmode="numeric" data-nisa-year="${y}" data-nisa-kind="growth" value="${val(v.growth)}" placeholder="0" ${isAuto ? 'disabled' : ''}></label>
+      </div>`;
+    }).join('');
+    yearsEl.querySelectorAll('input:not([disabled])').forEach((input) => {
+      input.addEventListener('input', () => {
+        draft[input.dataset.nisaYear][input.dataset.nisaKind] = Math.max(0, Math.round(Number(input.value) || 0));
+      });
+    });
+  };
+  sw.addEventListener('click', () => { sw.classList.toggle('on'); renderYears(); });
+  [accEl, monthlyEl, fromEl].forEach((el) => { el.addEventListener('input', renderYears); el.addEventListener('change', renderYears); });
+  renderYears();
   document.getElementById('nisa-cancel').addEventListener('click', closeModal);
   document.getElementById('nisa-save').addEventListener('click', async () => {
     const next = {};
-    document.querySelectorAll('[data-nisa-year]').forEach((input) => {
-      const v = input.value === '' ? 0 : Math.max(0, Math.round(Number(input.value) || 0));
-      if (!v) return;
-      const y = input.dataset.nisaYear;
-      next[y] = next[y] || { tsumitate: 0, growth: 0 };
-      next[y][input.dataset.nisaKind] = v;
-    });
+    years.forEach((y) => { if (draft[y].tsumitate || draft[y].growth) next[y] = { tsumitate: draft[y].tsumitate, growth: draft[y].growth }; });
     STATE.settings.nisaUsage = next;
+    STATE.settings.nisaAuto = readAuto();
     await persist();
     closeModal();
     showToast('NISAの利用額を保存しました');
@@ -1474,7 +1548,7 @@ document.getElementById('import-file-input').addEventListener('change', async (e
 
 // ---------- バージョン確認 ----------
 // 更新のたびに APP_VERSION と version.json の version を同じ値に上げる。
-const APP_VERSION = '1.11.0';
+const APP_VERSION = '1.12.0';
 document.getElementById('lock-version').textContent = `v${APP_VERSION}`;
 async function fetchLatestVersion() {
   const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
